@@ -3,14 +3,14 @@ using Microsoft.AspNetCore.Mvc;
 using test1.Service;
 
 
-namespace test1.api
+namespace test1.Controllers
 {
     [ApiController]
     [Route("Litter")]
-    public class Litter : ControllerBase
+    public class LitterController : ControllerBase
     {
         private readonly LitterDbContext _context;
-        public Litter(LitterDbContext context)
+        public LitterController(LitterDbContext context)
         {
             _context = context;
         }

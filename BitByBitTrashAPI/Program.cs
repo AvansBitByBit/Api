@@ -2,7 +2,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Mvc;
-using test1.Service;
+using BitByBitTrashAPI.Service;
 
 
 
@@ -56,7 +56,7 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 builder.Services.AddDbContext<LitterDbContext>(options =>
-options.UseSqlServer(sqlConnectionString));
+    options.UseSqlServer(sqlConnectionString));
 
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -81,6 +81,18 @@ builder.Services
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddTransient<IAuthenticationService, AspNetIdentityAuthenticationService>();
 
+// Configure CORS
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAllOrigins",
+        builder =>
+        {
+            builder.AllowAnyOrigin()
+                   .AllowAnyMethod()
+                   .AllowAnyHeader();
+        });
+});
+
 
 var app = builder.Build();
 
@@ -100,6 +112,9 @@ app.MapGet("/", () => $"BitByBit project WebAPI is up. Connection string found: 
 
 
 app.UseHttpsRedirection();
+
+// Use CORS
+app.UseCors("AllowAllOrigins");
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -124,3 +139,6 @@ app.MapPost("/account/logout",
 app.MapControllers();
 
 app.Run();
+
+// Make the implicit Program class public so tests can access it
+public partial class Program { }

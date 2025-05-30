@@ -1,7 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Http;
 
-namespace test1.Service;
+namespace BitByBitTrashAPI.Service;
 
 /// <summary>
 /// Based on the example code provided by Microsoft

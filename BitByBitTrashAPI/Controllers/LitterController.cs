@@ -1,9 +1,10 @@
 ﻿
 using Microsoft.AspNetCore.Mvc;
-using test1.Service;
+using BitByBitTrashAPI.Service;
+using BitByBitTrashAPI.Models;
 
 
-namespace test1.Controllers
+namespace BitByBitTrashAPI.Controllers
 {
     [ApiController]
     [Route("Litter")]
@@ -16,9 +17,9 @@ namespace test1.Controllers
         }
 
         [HttpGet(Name = "GetLitter")]
-        public IEnumerable<models.LitterModel> Get()
+        public IEnumerable<LitterModel> Get()
         {
-            return Enumerable.Range(1, 5).Select(index => new models.LitterModel
+            return Enumerable.Range(1, 5).Select(index => new LitterModel
             {
                 Id = 2,
                 Name = "Litter",
@@ -27,7 +28,7 @@ namespace test1.Controllers
         }
 
         [HttpPost(Name = "PostLitter")]
-        public IActionResult Post([FromBody] models.LitterModel litter)
+        public IActionResult Post([FromBody] LitterModel litter)
         {
             if (litter == null)
             {

@@ -1,4 +1,4 @@
-namespace test1.Service;
+namespace BitByBitTrashAPI.Service;
 
 public interface IAuthenticationService
 {

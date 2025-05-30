@@ -1,0 +1,6 @@
+@BitByBitTrashAPI_HostAddress = http://localhost:5091
+
+GET {{BitByBitTrashAPI_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

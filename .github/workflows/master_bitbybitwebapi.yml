@@ -1,56 +1,94 @@
-# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
-# More GitHub Actions for Azure: https://github.com/Azure/actions
+name: Build, Test and Deploy ASP.NET Core WebAPI to Azure
 
-name: Build and deploy ASP.Net Core app to Azure Web App - bitbybitwebapi
+env:
+  ARTIFACT_NAME: WebApi
+  DOTNET_CORE_VERSION: 9.0.x
+  PUBLISH_DIRECTORY: "./out/publish"
+  AZURE_WEBAPP_NAME: bitbybitwebapi
 
 on:
   push:
     branches:
+      - main
       - master
+      - deployment
   workflow_dispatch:
 
 jobs:
-  build:
-    runs-on: windows-latest
-    permissions:
-      contents: read #This is required for actions/checkout
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Check if AZURE_WEBAPP_NAME secret exists"
+        env: 
+          super_secret: ${{ secrets.AZURE_WEBAPP_NAME }}
+        if: ${{ env.super_secret == '' }}
+        run: 'echo "Secret AZURE_WEBAPP_NAME is missing."; exit 1;'
 
+      - name: "Check if Azure credentials exist"
+        env: 
+          client_id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_70EEEF87DCD24139A2DB2BE2874CCEDD }}
+          tenant_id: ${{ secrets.AZUREAPPSERVICE_TENANTID_A87851D2F0034150B3C7BDAA86B3D2E0 }}
+          subscription_id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_313AAC34B2E94031BEA899B4739FDE1B }}
+        if: ${{ env.client_id == '' || env.tenant_id == '' || env.subscription_id == '' }}
+        run: 'echo "Azure authentication secrets are missing."; exit 1;'
+
+  build:
+    runs-on: ubuntu-latest
+    needs: check
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up .NET Core
+      - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '9.x'
+          dotnet-version: ${{ env.DOTNET_CORE_VERSION }}
 
-      - name: Build with dotnet
-        run: dotnet build --configuration Release
+      - name: Restore dependencies
+        run: dotnet restore
 
-      - name: dotnet publish
-        run: dotnet publish -c Release -o "${{env.DOTNET_ROOT}}/myapp"
+      - name: Build
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test --no-build --configuration Release --verbosity normal --logger trx --results-directory TestResults
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: TestResults/*.trx
+
+      - name: Clean publish directory
+        run: |
+          rm -rf ${{ env.PUBLISH_DIRECTORY }}
+          mkdir -p ${{ env.PUBLISH_DIRECTORY }}      - name: Publish
+        run: dotnet publish ./BitByBitTrashAPI --output ${{ env.PUBLISH_DIRECTORY }} --configuration Release --no-build
 
       - name: Upload artifact for deployment job
         uses: actions/upload-artifact@v4
         with:
-          name: .net-app
-          path: ${{env.DOTNET_ROOT}}/myapp
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.PUBLISH_DIRECTORY }}
 
   deploy:
-    runs-on: windows-latest
-    needs: build
+    runs-on: ubuntu-latest
+    needs: [check, build]
     environment:
       name: 'Production'
       url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
     permissions:
-      id-token: write #This is required for requesting the JWT
-      contents: read #This is required for actions/checkout
-
+      id-token: write
+      contents: read
     steps:
       - name: Download artifact from build job
         uses: actions/download-artifact@v4
         with:
-          name: .net-app
-      
+          name: ${{ env.ARTIFACT_NAME }}
+          path: ${{ env.PUBLISH_DIRECTORY }}
+
       - name: Login to Azure
         uses: azure/login@v2
         with:
@@ -62,7 +100,6 @@ jobs:
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v3
         with:
-          app-name: 'bitbybitwebapi'
+          app-name: ${{ env.AZURE_WEBAPP_NAME }}
           slot-name: 'Production'
-          package: .
-          
+          package: ${{ env.PUBLISH_DIRECTORY }}

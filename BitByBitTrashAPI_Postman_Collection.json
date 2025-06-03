@@ -1,0 +1,368 @@
+{
+	"info": {
+		"_postman_id": "bitbybit-trash-api-collection",
+		"name": "BitByBitTrashAPI Collection",
+		"description": "Complete Postman collection for BitByBitTrashAPI endpoints including authentication and litter management",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "bitbybit-api"
+	},
+	"item": [
+		{
+			"name": "Health Check",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{base_url}}/",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						""
+					]
+				},
+				"description": "Check if the API is running and connection string is configured"
+			},
+			"response": []
+		},
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "Register User",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{user_email}}\",\n  \"password\": \"{{user_password}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/account/register",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"account",
+								"register"
+							]
+						},
+						"description": "Register a new user account. Password must be at least 10 characters with uppercase, lowercase, and digit."
+					},
+					"response": []
+				},
+				{
+					"name": "Login User",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const responseJson = pm.response.json();",
+									"    if (responseJson.accessToken) {",
+									"        pm.environment.set('auth_token', responseJson.accessToken);",
+									"        pm.environment.set('refresh_token', responseJson.refreshToken);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"{{user_email}}\",\n  \"password\": \"{{user_password}}\",\n  \"twoFactorCode\": \"\",\n  \"twoFactorRecoveryCode\": \"\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/account/login",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"account",
+								"login"
+							]
+						},
+						"description": "Login with email and password. Returns access token and refresh token."
+					},
+					"response": []
+				},
+				{
+					"name": "Refresh Token",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"if (pm.response.code === 200) {",
+									"    const responseJson = pm.response.json();",
+									"    if (responseJson.accessToken) {",
+									"        pm.environment.set('auth_token', responseJson.accessToken);",
+									"        pm.environment.set('refresh_token', responseJson.refreshToken);",
+									"    }",
+									"}"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"refreshToken\": \"{{refresh_token}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/account/refresh",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"account",
+								"refresh"
+							]
+						},
+						"description": "Refresh the access token using the refresh token"
+					},
+					"response": []
+				},
+				{
+					"name": "Logout User",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{}"
+						},
+						"url": {
+							"raw": "{{base_url}}/account/logout",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"account",
+								"logout"
+							]
+						},
+						"description": "Logout the current user (requires authentication)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get User Info",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/account/manage/info",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"account",
+								"manage",
+								"info"
+							]
+						},
+						"description": "Get current user information (requires authentication)"
+					},
+					"response": []
+				}
+			],
+			"description": "Authentication endpoints for user registration, login, logout, and token management"
+		},
+		{
+			"name": "Litter Management",
+			"item": [
+				{
+					"name": "Get All Litter",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"disabled": true
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/Litter",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"Litter"
+							]
+						},
+						"description": "Retrieve all litter records. Currently returns mock data."
+					},
+					"response": []
+				},
+				{
+					"name": "Create New Litter",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"disabled": true
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"id\": 1,\n  \"name\": \"{{litter_name}}\",\n  \"type\": \"{{litter_type}}\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/Litter",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"Litter"
+							]
+						},
+						"description": "Create a new litter record with name and type"
+					},
+					"response": []
+				}
+			],
+			"description": "Endpoints for managing litter data"
+		},
+		{
+			"name": "API Documentation",
+			"item": [
+				{
+					"name": "Swagger JSON",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/swagger/v1/swagger.json",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"swagger",
+								"v1",
+								"swagger.json"
+							]
+						},
+						"description": "Get the OpenAPI/Swagger specification in JSON format"
+					},
+					"response": []
+				},
+				{
+					"name": "Swagger UI",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/swagger",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"swagger"
+							]
+						},
+						"description": "Access the Swagger UI documentation interface"
+					},
+					"response": []
+				}
+			],
+			"description": "API documentation and specification endpoints"
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "https://localhost:5001",
+			"type": "string",
+			"description": "Base URL for the BitByBitTrashAPI"
+		},
+		{
+			"key": "user_email",
+			"value": "test@example.com",
+			"type": "string",
+			"description": "Email for testing user registration and login"
+		},
+		{
+			"key": "user_password",
+			"value": "TestPassword123",
+			"type": "string",
+			"description": "Password for testing (must meet complexity requirements: 10+ chars, uppercase, lowercase, digit)"
+		},
+		{
+			"key": "litter_name",
+			"value": "Plastic Bottle",
+			"type": "string",
+			"description": "Sample litter name for testing"
+		},
+		{
+			"key": "litter_type",
+			"value": "Plastic",
+			"type": "string",
+			"description": "Sample litter type for testing"
+		}
+	]
+}

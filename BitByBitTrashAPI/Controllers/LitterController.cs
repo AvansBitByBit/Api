@@ -2,6 +2,7 @@
 using Microsoft.AspNetCore.Mvc;
 using BitByBitTrashAPI.Service;
 using BitByBitTrashAPI.Models;
+using Microsoft.AspNetCore.Authorization;
 
 
 namespace BitByBitTrashAPI.Controllers
@@ -15,7 +16,7 @@ namespace BitByBitTrashAPI.Controllers
         {
             _context = context;
         }
-
+        [Authorize(Roles = "Beheerder, IT, Gebruiker")]
         [HttpGet(Name = "GetLitter")]
         public IEnumerable<LitterModel> Get()
         {
@@ -26,7 +27,7 @@ namespace BitByBitTrashAPI.Controllers
                 Type = "Description"
             });
         }
-
+        [Authorize(Roles = "Beheerder, IT")]
         [HttpPost(Name = "PostLitter")]
         public IActionResult Post([FromBody] LitterModel litter)
         {

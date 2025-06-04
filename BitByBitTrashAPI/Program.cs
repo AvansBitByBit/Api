@@ -136,6 +136,12 @@ app.MapPost("/account/logout",
     })
     .RequireAuthorization();
 
+using (var scope = app.Services.CreateScope())
+{
+    await SeedRoles.SeedAsync(scope.ServiceProvider);
+}
+
+
 app.MapControllers();
 
 app.Run();

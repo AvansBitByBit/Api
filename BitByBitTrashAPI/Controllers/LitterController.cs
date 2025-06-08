@@ -18,18 +18,19 @@ namespace BitByBitTrashAPI.Controllers
         }
         [Authorize(Roles = "Beheerder, IT, Gebruiker")]
         [HttpGet(Name = "GetLitter")]
-        public IEnumerable<LitterModel> Get()
+        public IEnumerable<TrashPickup> Get()
         {
-            return Enumerable.Range(1, 5).Select(index => new LitterModel
+            return Enumerable.Range(1, 5).Select(index => new TrashPickup
             {
-                Id = 2,
-                Name = "Litter",
-                Type = "Description"
+                Id = Guid.NewGuid(),
+                TrashType = new[] { "cola", "blikje", "fles", "plastic", "organisch" }[new Random().Next(0, 5)],
+                Location = new[] { "Breda", "Avans", "Lovensdijkstraat", "Hogeschoollaan", "naast de buurvrouw" }[new Random().Next(0, 5)] 
+                
             });
         }
         [Authorize(Roles = "Beheerder, IT")]
         [HttpPost(Name = "PostLitter")]
-        public IActionResult Post([FromBody] LitterModel litter)
+        public IActionResult Post([FromBody] TrashPickup litter)
         {
             if (litter == null)
             {

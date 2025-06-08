@@ -9,5 +9,5 @@ public class LitterDbContext : IdentityDbContext
     {
     }
 
-    public DbSet<BitByBitTrashAPI.Models.LitterModel> LitterModels { get; set; }
+    public DbSet<BitByBitTrashAPI.Models.TrashPickup> LitterModels { get; set; }
 }

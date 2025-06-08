@@ -53,15 +53,16 @@ public class LitterControllerTests : IClassFixture<WebApplicationFactory<Program
     public async Task Post_Litter_WithValidModel_ReturnsOk()
     {
         // Arrange
-        var litterModel = new LitterModel
+        var TrashPickup = new TrashPickup
         {
-            Id = 1,
-            Name = "Test Litter",
-            Type = "Test Type"
+            Id = Guid.NewGuid(),
+            Time = DateTime.Now,
+            TrashType = new[] { "cola", "blikje", "fles", "plastic", "organisch" }[new Random().Next(0, 5)],
+            Location = new[] { "Breda", "Avans", "Lovensdijkstraat", "Hogeschoollaan", "naast de buurvrouw" }[new Random().Next(0, 5)]
         };
 
         // Act
-        var response = await _client.PostAsJsonAsync("/Litter", litterModel);
+        var response = await _client.PostAsJsonAsync("/Litter", TrashPickup);
 
         // Assert
         response.EnsureSuccessStatusCode();
@@ -73,7 +74,7 @@ public class LitterControllerTests : IClassFixture<WebApplicationFactory<Program
     public async Task Post_Litter_WithNullModel_ReturnsBadRequest()
     {
         // Act
-        var response = await _client.PostAsJsonAsync("/Litter", (LitterModel?)null);
+        var response = await _client.PostAsJsonAsync("/Litter", (TrashPickup?)null);
 
         // Assert
         Assert.Equal(System.Net.HttpStatusCode.BadRequest, response.StatusCode);

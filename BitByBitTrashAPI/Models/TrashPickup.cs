@@ -10,7 +10,7 @@ namespace BitByBitTrashAPI.Models
         [Required] public string TrashType { get; set; } // verplichte veld
         
         public string Location { get; set; }
-        
+        public double Confidence { get; set; } // Confidence score for the pickup
         
     }
 }

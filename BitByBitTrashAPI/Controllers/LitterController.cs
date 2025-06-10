@@ -1,5 +1,4 @@
-﻿
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using BitByBitTrashAPI.Service;
 using BitByBitTrashAPI.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -24,7 +23,8 @@ namespace BitByBitTrashAPI.Controllers
             {
                 Id = Guid.NewGuid(),
                 TrashType = new[] { "cola", "blikje", "fles", "plastic", "organisch" }[new Random().Next(0, 5)],
-                Location = new[] { "Breda", "Avans", "Lovensdijkstraat", "Hogeschoollaan", "naast de buurvrouw" }[new Random().Next(0, 5)] 
+                Location = new[] { "Breda", "Avans", "Lovensdijkstraat", "Hogeschoollaan", "naast de buurvrouw" }[new Random().Next(0, 5)],
+                Confidence = Math.Round(new Random().NextDouble(), 2) // Example confidence value between 0.00 and 1.00
                 
             });
         }
@@ -37,6 +37,7 @@ namespace BitByBitTrashAPI.Controllers
                 return BadRequest("Litter cannot be null");
             }
             // Save the litter to the database or perform any other action
+            // Optionally, you can check litter.Confidence here
             return Ok("Het is gelukt");
         }
 

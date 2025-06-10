@@ -139,6 +139,12 @@ app.MapPost("/account/logout",
 using (var scope = app.Services.CreateScope())
 {
     await SeedRoles.SeedAsync(scope.ServiceProvider);
+
+    // Automatically apply migrations for both DbContexts
+    var litterDb = scope.ServiceProvider.GetRequiredService<LitterDbContext>();
+    await litterDb.Database.MigrateAsync();
+    var appDb = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    await appDb.Database.MigrateAsync();
 }
 
 

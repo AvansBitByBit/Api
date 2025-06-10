@@ -14,7 +14,8 @@ public class TrashPickupTests
             Id = Guid.NewGuid(),
             Time = DateTime.Now,
             TrashType = new[] { "cola", "blikje", "fles", "plastic", "organisch" }[new Random().Next(0, 5)],
-            Location = new[] { "Breda", "Avans", "Lovensdijkstraat", "Hogeschoollaan", "naast de buurvrouw" }[new Random().Next(0, 5)]
+            Location = new[] { "Breda", "Avans", "Lovensdijkstraat", "Hogeschoollaan", "naast de buurvrouw" }[new Random().Next(0, 5)],
+            Confidence = 0.85 // Example confidence value
         };
 
         // Assert
@@ -36,7 +37,8 @@ public class TrashPickupTests
             Id = Guid.NewGuid(),
             Time = DateTime.Now,
             TrashType = new[] { "cola", "blikje", "fles", "plastic", "organisch" }[new Random().Next(0, 5)],
-            Location = new[] { "Breda", "Avans", "Lovensdijkstraat", "Hogeschoollaan", "naast de buurvrouw" }[new Random().Next(0, 5)]
+            Location = new[] { "Breda", "Avans", "Lovensdijkstraat", "Hogeschoollaan", "naast de buurvrouw" }[new Random().Next(0, 5)],
+            Confidence = 0.85 // Example confidence value
         };
 
         // Assert

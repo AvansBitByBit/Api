@@ -10,4 +10,5 @@ public class LitterDbContext : IdentityDbContext
     }
 
     public DbSet<BitByBitTrashAPI.Models.TrashPickup> LitterModels { get; set; }
+    // No change needed for Confidence, EF Core will map the new property automatically after migration
 }

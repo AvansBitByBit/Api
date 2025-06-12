@@ -266,7 +266,230 @@
 					"response": []
 				}
 			],
-			"description": "Endpoints for managing litter data"
+			"description": "Endpoints for managing litter data"		},
+		{
+			"name": "Dummy Trash Controller (Testing)",
+			"item": [
+				{
+					"name": "Get All Dummy Trash",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/DummyTrash",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"DummyTrash"
+							]
+						},
+						"description": "Get all dummy trash pickups stored in memory (for testing frontend)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Random Trash Pickups",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/DummyTrash/random/{{random_count}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"DummyTrash",
+								"random",
+								"{{random_count}}"
+							]
+						},
+						"description": "Get a specific number of randomized trash pickups (1-100)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Single Random Trash",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/DummyTrash/random",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"DummyTrash",
+								"random"
+							]
+						},
+						"description": "Get a single random trash pickup"
+					},
+					"response": []
+				},
+				{
+					"name": "Create Trash Pickup",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"trashType\": \"{{trash_type}}\",\n  \"location\": \"{{trash_location}}\",\n  \"confidence\": {{trash_confidence}}\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/DummyTrash",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"DummyTrash"
+							]
+						},
+						"description": "Add a new trash pickup (for testing frontend POST functionality)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Trash Pickup by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/DummyTrash/{{trash_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"DummyTrash",
+								"{{trash_id}}"
+							]
+						},
+						"description": "Get a specific trash pickup by its GUID"
+					},
+					"response": []
+				},
+				{
+					"name": "Update Trash Pickup",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"trashType\": \"{{trash_type}}\",\n  \"location\": \"{{trash_location}}\",\n  \"confidence\": {{trash_confidence}}\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/DummyTrash/{{trash_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"DummyTrash",
+								"{{trash_id}}"
+							]
+						},
+						"description": "Update an existing trash pickup by its GUID"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Trash Pickup",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/DummyTrash/{{trash_id}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"DummyTrash",
+								"{{trash_id}}"
+							]
+						},
+						"description": "Delete a specific trash pickup by its GUID"
+					},
+					"response": []
+				},
+				{
+					"name": "Clear All Dummy Data",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/DummyTrash/clear",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"DummyTrash",
+								"clear"
+							]
+						},
+						"description": "Clear all dummy trash data from memory"
+					},
+					"response": []
+				},
+				{
+					"name": "Seed Dummy Data",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/DummyTrash/seed/{{seed_count}}",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"DummyTrash",
+								"seed",
+								"{{seed_count}}"
+							]
+						},
+						"description": "Seed the dummy data with a specified number of random trash pickups (1-1000)"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Statistics",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/api/DummyTrash/stats",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"DummyTrash",
+								"stats"
+							]
+						},
+						"description": "Get statistics about the dummy data including counts, breakdowns, and averages"
+					},
+					"response": []
+				}
+			],
+			"description": "Dummy trash controller endpoints for testing frontend functionality without real data persistence"
 		},
 		{
 			"name": "API Documentation",
@@ -357,12 +580,47 @@
 			"value": "Plastic Bottle",
 			"type": "string",
 			"description": "Sample litter name for testing"
-		},
-		{
+		},		{
 			"key": "litter_type",
 			"value": "Plastic",
 			"type": "string",
 			"description": "Sample litter type for testing"
+		},
+		{
+			"key": "trash_type",
+			"value": "plastic",
+			"type": "string",
+			"description": "Trash type for dummy controller (plastic, organic, paper, glass, restafval, blik)"
+		},
+		{
+			"key": "trash_location",
+			"value": "Breda",
+			"type": "string",
+			"description": "Location for trash pickup testing"
+		},
+		{
+			"key": "trash_confidence",
+			"value": "0.85",
+			"type": "string",
+			"description": "Confidence score for trash pickup (0.0 to 1.0)"
+		},
+		{
+			"key": "trash_id",
+			"value": "",
+			"type": "string",
+			"description": "GUID for specific trash pickup operations"
+		},
+		{
+			"key": "random_count",
+			"value": "5",
+			"type": "string",
+			"description": "Number of random trash pickups to generate (1-100)"
+		},
+		{
+			"key": "seed_count",
+			"value": "10",
+			"type": "string",
+			"description": "Number of trash pickups to seed (1-1000)"
 		}
 	]
 }

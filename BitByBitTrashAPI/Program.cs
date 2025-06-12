@@ -12,6 +12,11 @@ var builder = WebApplication.CreateBuilder(args);
 var sqlConnectionString = builder.Configuration.GetValue<string>("connectionString");
 var sqlConnectionStringFound = !string.IsNullOrWhiteSpace(sqlConnectionString);
 
+if (!sqlConnectionStringFound)
+{
+    throw new InvalidOperationException("Database connection string is not configured. Please add 'connectionString' to your appsettings.json or appsettings.Development.json file.");
+}
+
 // Add services to the container.
 builder.Services.AddControllers();
 
@@ -136,16 +141,25 @@ app.MapPost("/account/logout",
     })
     .RequireAuthorization();
 
-using (var scope = app.Services.CreateScope())
-{
-    await SeedRoles.SeedAsync(scope.ServiceProvider);
-
-    // Automatically apply migrations for both DbContexts
-    var litterDb = scope.ServiceProvider.GetRequiredService<LitterDbContext>();
-    await litterDb.Database.MigrateAsync();
-    var appDb = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    await appDb.Database.MigrateAsync();
-}
+// using (var scope = app.Services.CreateScope())
+// {
+//     try
+//     {
+//         await SeedRoles.SeedAsync(scope.ServiceProvider);
+//
+//         // Automatically apply migrations for both DbContexts
+//         var litterDb = scope.ServiceProvider.GetRequiredService<LitterDbContext>();
+//         await litterDb.Database.MigrateAsync();
+//         var appDb = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+//         await appDb.Database.MigrateAsync();
+//     }
+//     catch (Exception ex)
+//     {
+//         var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+//         logger.LogError(ex, "An error occurred while seeding the database or applying migrations.");
+//         throw;
+//     }
+// }
 
 
 app.MapControllers();

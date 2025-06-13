@@ -36,7 +36,7 @@ jobs:
         with:
           appSourcePath: ${{ github.workspace }}
           _dockerfilePathKey_: _dockerfilePath_
-          registryUrl: 
+          registryUrl: 'bitbybit.azurecr.io'
           registryUsername: ${{ secrets.BITBYBITAPI_REGISTRY_USERNAME }}
           registryPassword: ${{ secrets.BITBYBITAPI_REGISTRY_PASSWORD }}
           containerAppName: bitbybit-api

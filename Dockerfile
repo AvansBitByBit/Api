@@ -2,17 +2,19 @@
 FROM mcr.microsoft.com/dotnet/sdk:7.0 AS build
 WORKDIR /src
 
-# Copy solution and project files first for better cache usage
+# Copy solution and all project files including tests for restore
 COPY BitByBitTrashAPI.sln ./
 COPY BitByBitTrashAPI/*.csproj ./BitByBitTrashAPI/
+COPY BitByBitTrashAPI.Tests/*.csproj ./BitByBitTrashAPI.Tests/
 
-# Restore dependencies only (cache this step)
+# Restore dependencies for the whole solution
 RUN dotnet restore BitByBitTrashAPI.sln
 
-# Copy all source files
+# Copy all source files for both main app and tests
 COPY BitByBitTrashAPI/. ./BitByBitTrashAPI/
+COPY BitByBitTrashAPI.Tests/. ./BitByBitTrashAPI.Tests/
 
-# Publish the project (release mode, optimized)
+# Publish the main project (release mode, optimized)
 WORKDIR /src/BitByBitTrashAPI
 RUN dotnet publish -c Release -o /app/publish /p:UseAppHost=false
 

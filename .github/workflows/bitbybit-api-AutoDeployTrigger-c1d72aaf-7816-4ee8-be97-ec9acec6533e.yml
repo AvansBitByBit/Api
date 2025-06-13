@@ -1,8 +1,6 @@
 name: Trigger auto deployment for bitbybit-api
 
-# When this action will be executed
 on:
-  # Automatically trigger it when detected changes in repo
   push:
     branches: 
       [ master ]
@@ -10,15 +8,14 @@ on:
     - '**'
     - '.github/workflows/bitbybit-api-AutoDeployTrigger-c1d72aaf-7816-4ee8-be97-ec9acec6533e.yml'
 
-  # Allow manual trigger 
   workflow_dispatch:      
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     permissions: 
-      id-token: write #This is required for requesting the OIDC JWT Token
-      contents: read #Required when GH token is used to authenticate with private repo
+      id-token: write
+      contents: read
 
     steps:
       - name: Checkout to the branch
@@ -34,15 +31,11 @@ jobs:
       - name: Build and push container image to registry
         uses: azure/container-apps-deploy-action@v2
         with:
-          appSourcePath: ${{ github.workspace }}
-          _dockerfilePathKey_: _dockerfilePath_
+          appSourcePath: './Api'
+          dockerfilePath: './Api/Dockerfile'
           registryUrl: 'bitbybit.azurecr.io'
           registryUsername: ${{ secrets.BITBYBITAPI_REGISTRY_USERNAME }}
           registryPassword: ${{ secrets.BITBYBITAPI_REGISTRY_PASSWORD }}
-          containerAppName: bitbybit-api
-          resourceGroup: pythonapi
-          imageToBuild: default/[parameters('containerAppName')]:${{ github.sha }}
-          _buildArgumentsKey_: |
-            _buildArgumentsValues_
-
-
+          containerAppName: 'bitbybit-api'
+          resourceGroup: 'pythonapi'
+          imageToBuild: 'bitbybit.azurecr.io/bitbybit-api:${{ github.sha }}'

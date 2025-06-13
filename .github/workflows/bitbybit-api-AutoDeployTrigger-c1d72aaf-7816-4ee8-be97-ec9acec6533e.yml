@@ -3,12 +3,12 @@ name: Trigger auto deployment for bitbybit-api
 on:
   push:
     branches: 
-      [ master ]
+      - master
     paths:
-    - '**'
-    - '.github/workflows/bitbybit-api-AutoDeployTrigger-c1d72aaf-7816-4ee8-be97-ec9acec6533e.yml'
+      - '**'
+      - '.github/workflows/bitbybit-api-AutoDeployTrigger-c1d72aaf-7816-4ee8-be97-ec9acec6533e.yml'
 
-  workflow_dispatch:      
+  workflow_dispatch:
 
 jobs:
   build-and-deploy:
@@ -39,3 +39,4 @@ jobs:
           containerAppName: 'bitbybit-api'
           resourceGroup: 'pythonapi'
           imageToBuild: 'bitbybit.azurecr.io/bitbybit-api:${{ github.sha }}'
+          targetPort: 5091

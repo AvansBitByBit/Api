@@ -1,5 +1,5 @@
-# Use SDK image for build
-FROM mcr.microsoft.com/dotnet/sdk:7.0 AS build
+FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
+
 WORKDIR /src
 
 # Copy solution and all project files including tests for restore
@@ -18,8 +18,7 @@ COPY BitByBitTrashAPI.Tests/. ./BitByBitTrashAPI.Tests/
 WORKDIR /src/BitByBitTrashAPI
 RUN dotnet publish -c Release -o /app/publish /p:UseAppHost=false
 
-# Use runtime image for final stage
-FROM mcr.microsoft.com/dotnet/aspnet:7.0 AS runtime
+FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
 WORKDIR /app
 
 # Copy published output from build stage

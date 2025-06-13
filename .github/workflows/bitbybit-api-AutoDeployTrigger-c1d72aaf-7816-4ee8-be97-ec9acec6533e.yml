@@ -20,7 +20,10 @@ jobs:
     steps:
       - name: Checkout to the branch
         uses: actions/checkout@v2
-        
+
+      - name: Login to ACR
+        run: echo "${{ secrets.REGISTRY_PASSWORD }}" | docker login bitbybit.azurecr.io -u ${{ secrets.REGISTRY_USERNAME }} --password-stdin
+
       - name: List files in repo root
         run: ls -la
 

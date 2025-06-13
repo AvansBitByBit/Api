@@ -99,6 +99,12 @@ builder.Services.AddCors(options =>
 });
 
 
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.ListenAnyIP(5091); // THIS IS WHAT AZURE NEEDS
+});
+
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

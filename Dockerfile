@@ -23,5 +23,5 @@ WORKDIR /app
 # Copy published output from build stage
 COPY --from=build /app/publish .
 
-# Entrypoint for the app
+EXPOSE 5091
 ENTRYPOINT ["dotnet", "BitByBitTrashAPI.dll"]

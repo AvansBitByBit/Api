@@ -36,8 +36,7 @@ namespace BitByBitTrashAPI.Controllers
             {
                 return BadRequest("Litter cannot be null");
             }
-            // Save the litter to the database or perform any other action
-            // Optionally, you can check litter.Confidence here
+
             return Ok("Het is gelukt");
         }
 

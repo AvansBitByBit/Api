@@ -10,14 +10,14 @@ using BitByBitTrashAPI.Service;
 var builder = WebApplication.CreateBuilder(args);
 
 var sqlConnectionString =
-    Environment.GetEnvironmentVariable("CONNECTIONSTRING") ??
+    Environment.GetEnvironmentVariable("connectionString") ??
     builder.Configuration.GetValue<string>("connectionString");
 
 var sqlConnectionStringFound = !string.IsNullOrWhiteSpace(sqlConnectionString);
 
 // if (!sqlConnectionStringFound)
 // {
-//     throw new InvalidOperationException("Database connection string is not configured. Please add 'connectionString' to your appsettings.json or appsettings.Development.json file.");
+//     throw new InvalidOperationException("Database connection string is not configured. Please add 'connectionString'.");
 // }
 
 // Add services to the container.

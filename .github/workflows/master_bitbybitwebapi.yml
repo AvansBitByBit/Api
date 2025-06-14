@@ -54,12 +54,12 @@ jobs:
       - name: Test
         run: dotnet test BitByBitTrashAPI.sln --no-build --configuration Release --verbosity normal --logger trx --results-directory TestResults
 
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test-results
-          path: TestResults/*.trx
+      # - name: Upload test results
+      #   uses: actions/upload-artifact@v4
+      #   if: always()
+      #   with:
+      #     name: test-results
+      #     path: TestResults/*.trx
 
       - name: Clean publish directory
         run: |

@@ -21,6 +21,9 @@ RUN dotnet publish -c Release -o /app/publish /p:UseAppHost=false
 FROM mcr.microsoft.com/dotnet/aspnet:9.0 AS runtime
 WORKDIR /app
 
+# Set ASP.NET Core to listen on port 5091
+ENV ASPNETCORE_URLS=http://+:5091
+
 # Copy published output from build stage
 COPY --from=build /app/publish .
 

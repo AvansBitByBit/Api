@@ -9,7 +9,10 @@ using BitByBitTrashAPI.Service;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var sqlConnectionString = builder.Configuration.GetValue<string>("connectionString");
+var sqlConnectionString =
+    Environment.GetEnvironmentVariable("CONNECTIONSTRING") ??
+    builder.Configuration.GetValue<string>("connectionString");
+
 var sqlConnectionStringFound = !string.IsNullOrWhiteSpace(sqlConnectionString);
 
 // if (!sqlConnectionStringFound)

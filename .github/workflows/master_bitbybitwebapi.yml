@@ -69,11 +69,11 @@ jobs:
       - name: Publish
         run: dotnet publish ./BitByBitTrashAPI --output ${{ env.PUBLISH_DIRECTORY }} --configuration Release --no-build
 
-      - name: Upload artifact for deployment job
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ env.ARTIFACT_NAME }}
-          path: ${{ env.PUBLISH_DIRECTORY }}
+      # - name: Upload artifact for deployment job
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: ${{ env.ARTIFACT_NAME }}
+      #     path: ${{ env.PUBLISH_DIRECTORY }}
 
   deploy:
     runs-on: ubuntu-latest

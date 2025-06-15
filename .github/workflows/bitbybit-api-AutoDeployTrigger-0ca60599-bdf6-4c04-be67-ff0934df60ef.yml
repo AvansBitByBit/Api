@@ -39,7 +39,7 @@ jobs:
           export PATH="$PATH:/home/runner/.dotnet/tools"
           dotnet ef database update --project BitByBitTrashAPI/BitByBitTrashAPI.csproj --context BitByBitTrashAPI.Service.LitterDbContext
         env:
-          ConnectionStrings__DefaultConnection: ${{ secrets.DEFAULT_CONNECTION_STRING }}
+          connectionString: ${{ secrets.DEFAULT_CONNECTION_STRING }}
 
       - name: Build and push container image to registry
         uses: azure/container-apps-deploy-action@v2

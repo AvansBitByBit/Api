@@ -33,4 +33,4 @@ COPY --from=build /app/publish .
 EXPOSE 5091
 
 # Run migrations before starting the app
-ENTRYPOINT ["sh", "-c", "export PATH=\"$PATH:/root/.dotnet/tools\" && dotnet ef database update --no-build --context BitByBitTrashAPI.Service.LitterDbContext && dotnet BitByBitTrashAPI.dll"]
+ENTRYPOINT ["sh", "-c", "export PATH=\"$PATH:/root/.dotnet/tools\" && dotnet ef database update --project BitByBitTrashAPI/BitByBitTrashAPI.csproj --no-build --context BitByBitTrashAPI.Service.LitterDbContext && dotnet BitByBitTrashAPI.dll"]

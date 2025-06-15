@@ -31,6 +31,14 @@ jobs:
           tenant-id: ${{ secrets.BITBYBITAPI_AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.BITBYBITAPI_AZURE_SUBSCRIPTION_ID }}
 
+      - name: Install EF Core Tools
+        run: dotnet tool install --global dotnet-ef
+
+      - name: Update database
+        run: |
+          export PATH="$PATH:/home/runner/.dotnet/tools"
+          dotnet ef database update --context BitByBitTrashAPI.Service.LitterDbContext
+
       - name: Build and push container image to registry
         uses: azure/container-apps-deploy-action@v2
         with:

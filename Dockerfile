@@ -24,8 +24,13 @@ WORKDIR /app
 # Set ASP.NET Core to listen on port 5091
 ENV ASPNETCORE_URLS=http://+:5091
 
+# Install EF Core CLI for migrations
+RUN dotnet tool install --global dotnet-ef && export PATH="$PATH:/root/.dotnet/tools"
+
 # Copy published output from build stage
 COPY --from=build /app/publish .
 
 EXPOSE 5091
-ENTRYPOINT ["dotnet", "BitByBitTrashAPI.dll"]
+
+# Run migrations before starting the app
+ENTRYPOINT ["sh", "-c", "export PATH=\"$PATH:/root/.dotnet/tools\" && dotnet ef database update --no-build --context BitByBitTrashAPI.Service.LitterDbContext && dotnet BitByBitTrashAPI.dll"]

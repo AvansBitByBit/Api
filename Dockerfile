@@ -25,13 +25,9 @@ WORKDIR /app
 ENV ASPNETCORE_URLS=http://+:5091
 ENV ConnectionString=""
 
-# Install EF Core CLI for migrations
-RUN dotnet tool install --global dotnet-ef && export PATH="$PATH:/root/.dotnet/tools"
-
 # Copy published output from build stage
 COPY --from=build /app/publish .
 
 EXPOSE 5091
 
-# Run migrations before starting the app
-ENTRYPOINT ["sh", "-c", "export PATH=\"$PATH:/root/.dotnet/tools\" && connectionString=\"$ConnectionString\" dotnet ef database update --project BitByBitTrashAPI/BitByBitTrashAPI.csproj --no-build --context BitByBitTrashAPI.Service.LitterDbContext && dotnet BitByBitTrashAPI.dll"]
+ENTRYPOINT ["dotnet", "BitByBitTrashAPI.dll"]

@@ -34,6 +34,9 @@ jobs:
       - name: Install EF Core Tools
         run: dotnet tool install --global dotnet-ef
 
+      - name: Build
+        run: dotnet build BitByBitTrashAPI/BitByBitTrashAPI.csproj --configuration Release
+
       - name: Update database
         run: |
           export PATH="$PATH:/home/runner/.dotnet/tools"

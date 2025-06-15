@@ -1,0 +1,98 @@
+# name: Build, Test and Deploy ASP.NET Core WebAPI to Azure
+
+# env:
+#   ARTIFACT_NAME: WebApi
+#   DOTNET_CORE_VERSION: 9.0.x
+#   PUBLISH_DIRECTORY: "./out/publish"
+#   AZURE_WEBAPP_NAME: bitbybitwebapi
+
+# on:
+#   push:
+#     branches:
+#       - main
+#       - master
+#       - deployment
+#   workflow_dispatch:
+
+# jobs:
+#   check:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: "Check if AZURE_WEBAPP_NAME secret exists"
+#         env: 
+#           super_secret: ${{ secrets.AZURE_WEBAPP_NAME }}
+#         if: ${{ env.super_secret == '' }}
+#         run: 'echo "Secret AZURE_WEBAPP_NAME is missing."; exit 1;'
+
+#       - name: "Check if Azure credentials exist"
+#         env: 
+#           client_id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_70EEEF87DCD24139A2DB2BE2874CCEDD }}
+#           tenant_id: ${{ secrets.AZUREAPPSERVICE_TENANTID_A87851D2F0034150B3C7BDAA86B3D2E0 }}
+#           subscription_id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_313AAC34B2E94031BEA899B4739FDE1B }}
+#         if: ${{ env.client_id == '' || env.tenant_id == '' || env.subscription_id == '' }}
+#         run: 'echo "Azure authentication secrets are missing."; exit 1;'
+
+#   build:
+#     runs-on: ubuntu-latest
+#     needs: check
+#     permissions:
+#       contents: read
+#     steps:
+#       - uses: actions/checkout@v4
+
+#       - name: Setup .NET
+#         uses: actions/setup-dotnet@v4
+#         with:
+#           dotnet-version: ${{ env.DOTNET_CORE_VERSION }}
+
+#       - name: Install EF Core Tools
+#         run: dotnet tool install --global dotnet-ef
+
+#       - name: Update database
+#         run: |
+#           export PATH="$PATH:/home/runner/.dotnet/tools"
+#           dotnet ef database update --project BitByBitTrashAPI/BitByBitTrashAPI.csproj --context BitByBitTrashAPI.Service.LitterDbContext
+#         env:
+#           connectionString: ${{ secrets.DEFAULT_CONNECTION_STRING }}
+
+#       - name: Restore dependencies
+#         run: dotnet restore BitByBitTrashAPI.sln
+
+#       - name: Build
+#         run: dotnet build BitByBitTrashAPI.sln --no-restore --configuration Release
+
+#       - name: Test
+#         run: dotnet test BitByBitTrashAPI.sln --no-build --configuration Release --verbosity normal --logger trx --results-directory TestResults
+
+#       - name: Clean publish directory
+#         run: |
+#           rm -rf ${{ env.PUBLISH_DIRECTORY }}
+#           mkdir -p ${{ env.PUBLISH_DIRECTORY }}
+
+#       - name: Publish
+#         run: dotnet publish ./BitByBitTrashAPI --output ${{ env.PUBLISH_DIRECTORY }} --configuration Release --no-build
+
+#   deploy:
+#     runs-on: ubuntu-latest
+#     needs: [check, build]
+#     environment:
+#       name: 'Production'
+#       url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
+#     permissions:
+#       id-token: write
+#       contents: read
+#     steps:
+#       - name: Login to Azure
+#         uses: azure/login@v2
+#         with:
+#           client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_70EEEF87DCD24139A2DB2BE2874CCEDD }}
+#           tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_A87851D2F0034150B3C7BDAA86B3D2E0 }}
+#           subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_313AAC34B2E94031BEA899B4739FDE1B }}
+
+#       - name: Deploy to Azure Web App
+#         id: deploy-to-webapp
+#         uses: azure/webapps-deploy@v3
+#         with:
+#           app-name: ${{ env.AZURE_WEBAPP_NAME }}
+#           slot-name: 'Production'
+#           package: ${{ env.PUBLISH_DIRECTORY }}

@@ -26,6 +26,12 @@ builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
+builder.Services.AddHttpClient<IWeatherApiService, WeatherApiService>(client =>
+{
+    client.BaseAddress = new Uri("https://api.open-meteo.com/v1/forecast?latitude=51.571915&longitude=4.768323&current=temperature_2m,is_day&timezone=Europe%2FBerlin&forecast_days=1");
+});
+
+
 // Add Swagger services
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>

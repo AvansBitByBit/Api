@@ -4,7 +4,7 @@ namespace BitByBitTrashAPI.Service
 {
     public interface IWeatherApiService
     {
-        Task<WeatherModel> GetWeatherAsync(string city);
+        Task<WeatherModel> GetWeatherAsync();
     }
 
 }

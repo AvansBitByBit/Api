@@ -14,27 +14,15 @@ on:
   workflow_dispatch:      
 
 jobs:
-  build-Test-and-deploy:
+  test:
     runs-on: ubuntu-latest
-    permissions: 
-      id-token: write #This is required for requesting the OIDC JWT Token
-      contents: read #Required when GH token is used to authenticate with private repo
-
     steps:
       - name: Checkout to the branch
         uses: actions/checkout@v2
-
-      
-      - name: Azure Login
-        uses: azure/login@v1
+      - name: Setup .NET 9.0
+        uses: actions/setup-dotnet@v4
         with:
-          client-id: ${{ secrets.BITBYBITAPI_AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.BITBYBITAPI_AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.BITBYBITAPI_AZURE_SUBSCRIPTION_ID }}
-
-      - name: Install EF Core Tools
-        run: dotnet tool install --global dotnet-ef
-
+          dotnet-version: 9.0.x
       - name: Cache NuGet packages
         uses: actions/cache@v4
         with:
@@ -42,37 +30,58 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: |
             ${{ runner.os }}-nuget-
+      - name: Restore dependencies
+        run: dotnet restore BitByBitTrashAPI.sln
+      - name: Build solution
+        run: dotnet build BitByBitTrashAPI.sln --no-restore --configuration Release
+      - name: Run unit tests
+        run: dotnet test BitByBitTrashAPI.sln --no-build --verbosity normal
 
-      - name: Cache dotnet tools
-        uses: actions/cache@v4
-        with:
-          path: ~/.dotnet/tools
-          key: ${{ runner.os }}-dotnet-tools-${{ hashFiles('**/*.csproj') }}
-          restore-keys: |
-            ${{ runner.os }}-dotnet-tools-
-
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout to the branch
+        uses: actions/checkout@v2
       - name: Setup .NET 9.0
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 9.0.x
-      
-      - name: Clean solution
-        run: dotnet clean BitByBitTrashAPI/BitByBitTrashAPI.csproj
-
-   
+      - name: Restore dependencies
+        run: dotnet restore BitByBitTrashAPI.sln
+      - name: Build solution
+        run: dotnet build BitByBitTrashAPI.sln --no-restore --configuration Release
+      - name: Install EF Core Tools
+        run: dotnet tool install --global dotnet-ef
       - name: Update database
         run: |
           export PATH="$PATH:/home/runner/.dotnet/tools"
           dotnet ef database update --project BitByBitTrashAPI/BitByBitTrashAPI.csproj --context BitByBitTrashAPI.Service.LitterDbContext
         env:
           connectionString: ${{ secrets.DEFAULT_CONNECTION_STRING }}
+      - name: Publish app
+        run: dotnet publish BitByBitTrashAPI/BitByBitTrashAPI.csproj --configuration Release --output ./publish
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: published-app
+          path: ./publish
 
-      - name: Build solution
-        run: dotnet build --no-restore --configuration Release
-
-      - name: Run unit tests
-        run: dotnet test --no-build --verbosity normal
-
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: published-app
+          path: ./publish
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          client-id: ${{ secrets.BITBYBITAPI_AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.BITBYBITAPI_AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.BITBYBITAPI_AZURE_SUBSCRIPTION_ID }}
       - name: Build and push container image to registry
         uses: azure/container-apps-deploy-action@v2
         with:

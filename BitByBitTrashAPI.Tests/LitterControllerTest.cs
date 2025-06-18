@@ -8,8 +8,11 @@ using System.Net.Http;
 using System.Net;
 using System.Threading;
 using System;
+using Moq.Protected;
+
 
 namespace LitterControlTest;
+
 public class LitterControllerTest
 {
     private LitterController CreateController(HttpResponseMessage litterResponse, HttpResponseMessage weatherResponse, string token = "test-token")
@@ -68,9 +71,11 @@ public class LitterControllerTest
 
         // Assert
         var okResult = Assert.IsType<OkObjectResult>(result);
-        dynamic data = okResult.Value;
-        Assert.NotNull(data.litter);
-        Assert.NotNull(data.weather);
+        var json = System.Text.Json.JsonSerializer.Serialize(okResult.Value);
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        Assert.True(root.TryGetProperty("litter", out _));
+        Assert.True(root.TryGetProperty("weather", out _));
     }
 
     [Fact]

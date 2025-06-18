@@ -35,7 +35,7 @@ jobs:
       - name: Build solution
         run: dotnet build BitByBitTrashAPI.sln --no-restore --configuration Release
       - name: Run unit tests
-        run: dotnet test BitByBitTrashAPI.sln --no-build --verbosity normal
+        run: dotnet test BitByBitTrashAPI.sln --no-build --configuration Release --verbosity normal
 
   build:
     runs-on: ubuntu-latest

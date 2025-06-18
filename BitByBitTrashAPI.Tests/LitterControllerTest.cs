@@ -2,79 +2,95 @@
 using Moq;
 using Microsoft.AspNetCore.Mvc;
 using BitByBitTrashAPI.Controllers;
-using BitByBitTrashAPI.Models;
-using Microsoft.EntityFrameworkCore;
-using System.Collections.Generic;
-using System.Linq;
-using BitByBitTrashAPI.Service;
+using Microsoft.Extensions.Configuration;
+using System.Threading.Tasks;
+using System.Net.Http;
+using System.Net;
+using System.Threading;
+using System;
+using Moq.Protected;
+
 
 namespace LitterControlTest;
+
 public class LitterControllerTest
 {
-    private LitterController CreateController()
+    private LitterController CreateController(HttpResponseMessage litterResponse, HttpResponseMessage weatherResponse, string token = "test-token")
     {
-        // DbContext is niet direct nodig voor huidige implementatie, maar mock voor constructor
-        var options = new DbContextOptionsBuilder<LitterDbContext>()
-            .UseInMemoryDatabase(databaseName: "TestDb")
-            .Options;
-        var context = new LitterDbContext(options);
-        return new LitterController(context);
-    }
+        // Mock IHttpClientFactory
+        var mockFactory = new Mock<IHttpClientFactory>();
+        var mockClient = new Mock<HttpMessageHandler>();
+        var sequence = new MockSequence();
 
-    [Fact]
-    public void Get_ReturnsFiveTrashPickups()
-    {
-        // Arrange
-        var controller = CreateController();
+        // Setup token request
+        var tokenClient = new Mock<HttpMessageHandler>();
+        tokenClient.Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent($"{{\"token\":\"{token}\"}}")
+            });
+        var litterClient = new Mock<HttpMessageHandler>();
+        litterClient.Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.Is<HttpRequestMessage>(r => r.RequestUri.ToString().Contains("/api/Litter")), ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(litterResponse);
+        var weatherClient = new Mock<HttpMessageHandler>();
+        weatherClient.Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.Is<HttpRequestMessage>(r => r.RequestUri.ToString().Contains("open-meteo.com")), ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(weatherResponse);
 
-        // Act
-        var result = controller.Get();
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.Equal(5, result.Count());
-        Assert.All(result, item =>
+        // Setup factory to return correct client for each call
+        var callCount = 0;
+        mockFactory.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(() =>
         {
-            Assert.NotNull(item.Id);
-            Assert.False(string.IsNullOrEmpty(item.TrashType));
-            Assert.False(string.IsNullOrEmpty(item.Location));
-            Assert.InRange(item.Confidence, 0.0, 1.0);
+            callCount++;
+            if (callCount == 1) return new HttpClient(tokenClient.Object);
+            if (callCount == 2) return new HttpClient(litterClient.Object);
+            return new HttpClient(weatherClient.Object);
         });
+
+        // Mock IConfiguration
+        var mockConfig = new Mock<IConfiguration>();
+        mockConfig.Setup(c => c["SensoringToken"]).Returns("dummy");
+
+        return new LitterController(mockFactory.Object, mockConfig.Object);
     }
 
     [Fact]
-    public void Post_NullLitter_ReturnsBadRequest()
+    public async Task Get_ReturnsCombinedLitterAndWeather()
     {
         // Arrange
-        var controller = CreateController();
+        var litterJson = "{\"testLitter\":123}";
+        var weatherJson = "{\"testWeather\":456}";
+        var litterResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(litterJson) };
+        var weatherResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(weatherJson) };
+        var controller = CreateController(litterResponse, weatherResponse);
 
         // Act
-        var result = controller.Post(null);
-
-        // Assert
-        var badRequest = Assert.IsType<BadRequestObjectResult>(result);
-        Assert.Equal("Litter cannot be null", badRequest.Value);
-    }
-
-    [Fact]
-    public void Post_ValidLitter_ReturnsOk()
-    {
-        // Arrange
-        var controller = CreateController();
-        var litter = new TrashPickup
-        {
-            Id = System.Guid.NewGuid(),
-            TrashType = "plastic",
-            Location = "Breda",
-            Confidence = 0.8,
-            Time = System.DateTime.Now
-        };
-
-        // Act
-        var result = controller.Post(litter);
+        var result = await controller.Get();
 
         // Assert
         var okResult = Assert.IsType<OkObjectResult>(result);
-        Assert.Equal("Het is gelukt", okResult.Value);
+        var json = System.Text.Json.JsonSerializer.Serialize(okResult.Value);
+        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        var root = doc.RootElement;
+        Assert.True(root.TryGetProperty("litter", out _));
+        Assert.True(root.TryGetProperty("weather", out _));
+    }
+
+    [Fact]
+    public async Task Get_Returns502IfTokenFails()
+    {
+        // Arrange
+        var litterResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") };
+        var weatherResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") };
+        var controller = CreateController(litterResponse, weatherResponse, token: "");
+
+        // Act
+        var result = await controller.Get();
+
+        // Assert
+        var status = Assert.IsType<ObjectResult>(result);
+        Assert.Equal(502, status.StatusCode);
     }
 }

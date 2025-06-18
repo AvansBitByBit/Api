@@ -19,7 +19,7 @@ namespace BitByBitTrashAPI.Controllers
         [HttpGet]
         public async Task<ActionResult<WeatherModel>> GetWeather()
         {
-            var weather = await _weatherApiService.GetWeatherAsync(null);
+            var weather = await _weatherApiService.GetWeatherAsync();
             if (weather == null)
                 return NotFound();
 

@@ -8,10 +8,17 @@ namespace BitByBitTrashAPI.Controllers
     public class DummyTrashController : ControllerBase
     {
         private static readonly string[] TrashTypes = { "plastic", "organic", "paper", "glass", "restafval", "blik" };
-        private static readonly string[] Locations = { 
-            "Breda", "Avans", "Lovensdijkstraat", "Hogeschoollaan", 
-            "naast de buurvrouw", "Park Valkenberg", "Grote Markt", 
-            "Havermarkt", "Chasséveld", "Ginneken"
+        private static readonly string[] Locations = {
+            "Middellaan 852, Breda",
+            "Lovensdijkstraat 63, Breda",
+            "Hogeschoollaan 1, Breda",
+            "Tramsingel 21, Breda",
+            "Nieuwe Ginnekenstraat 20, Breda",
+            "Stationsplein 14, Breda", // near Park Valkenberg
+            "Grote Markt 36, Breda",
+            "Havermarkt 25, Breda",
+            "Claudius Prinsenlaan 128, Breda",
+            "Ginnekenweg 162, Breda"
         };
         
         private static readonly List<TrashPickup> _dummyData = new();

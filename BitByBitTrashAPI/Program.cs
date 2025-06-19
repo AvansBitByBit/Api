@@ -113,6 +113,8 @@ builder.WebHost.ConfigureKestrel(options =>
     options.ListenAnyIP(5091); // THIS IS WHAT AZURE NEEDS
 });
 
+builder.Services.AddScoped<GeocodingService>();
+
 
 var app = builder.Build();
 

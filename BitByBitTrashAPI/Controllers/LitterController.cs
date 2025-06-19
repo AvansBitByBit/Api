@@ -13,12 +13,14 @@ namespace BitByBitTrashAPI.Controllers
     [Route("Litter")]
     public class LitterController : ControllerBase
     {
+        private readonly GeocodingService _geocodingService;
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
-        public LitterController(IHttpClientFactory httpClientFactory, IConfiguration configuration)
+        public LitterController(IHttpClientFactory httpClientFactory, IConfiguration configuration, GeocodingService geocodingService)
         {
             _httpClientFactory = httpClientFactory;
             _configuration = configuration;
+            _geocodingService = geocodingService;
         }
 
         [Authorize(Roles = "Beheerder, IT, Gebruiker")]
@@ -32,16 +34,50 @@ namespace BitByBitTrashAPI.Controllers
             if (string.IsNullOrEmpty(token))
                 return StatusCode(502, "Failed to authenticate with sensor API");
 
-            // 2. Fetch litter data from sensor API
-            var litterData = await GetSensorLitterData(token);
-            if (litterData == null)
+            //// 2. Fetch litter data from sensor API
+            //var litterData = await GetSensorLitterData(token);
+            //if (litterData == null)
+            //    return StatusCode(502, "Failed to fetch litter data");
+
+            var litterRaw = await GetSensorLitterData(token);
+            if (litterRaw == null)
                 return StatusCode(502, "Failed to fetch litter data");
+
+            using var doc = JsonDocument.Parse((string)litterRaw);
+            var litterArray = doc.RootElement;
+
+            if (litterArray.ValueKind != JsonValueKind.Array)
+                return StatusCode(500, "Litter data is not a JSON array.");
+
 
             // 3. Fetch weather data (replace with your location and API key)
             var weatherData = await GetWeatherData();
 
-            // 4. Combine and return
-            return Ok(new { litter = litterData, weather = weatherData });
+            // Hier word de geocoding geimplementeerd zodat we de locatie in lat/lon krijgen.
+            var enrichedLitter = new List<object>();
+
+            foreach (var item in litterArray.EnumerateArray())
+            {
+                var location = item.GetProperty("location").GetString();
+                var coords = await _geocodingService.GeocodeAsync(location);
+
+                if (coords != null)
+                {
+                    enrichedLitter.Add(new
+                    {
+                        id = item.GetProperty("id").GetString(),
+                        location,
+                        latitude = coords.Value.lat,
+                        longitude = coords.Value.lon,
+                        trash_type = item.GetProperty("trash_type").GetString(),
+                        time = item.GetProperty("time").GetString()
+                    });
+                }
+            }
+
+
+            return Ok(new { litter = enrichedLitter, weather = weatherData });
+
         }
 
         private async Task<string> GetSensorApiToken()

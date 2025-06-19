@@ -6,6 +6,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using BitByBitTrashAPI.Service;
 
 namespace BitByBitTrashAPI.Controllers
 {
@@ -15,18 +16,18 @@ namespace BitByBitTrashAPI.Controllers
     {
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
-        public LitterController(IHttpClientFactory httpClientFactory, IConfiguration configuration)
+        private readonly LitterDbContext _dbContext;
+        public LitterController(IHttpClientFactory httpClientFactory, IConfiguration configuration, LitterDbContext dbContext)
         {
             _httpClientFactory = httpClientFactory;
             _configuration = configuration;
+            _dbContext = dbContext;
         }
 
         [Authorize(Roles = "Beheerder, IT, Gebruiker")]
         [HttpGet(Name = "GetLitter")]
         public async Task<IActionResult> Get()
         {
-           
-
             // 1. Authenticate with sensor API
             var token = await GetSensorApiToken();
             if (string.IsNullOrEmpty(token))
@@ -37,10 +38,39 @@ namespace BitByBitTrashAPI.Controllers
             if (litterData == null)
                 return StatusCode(502, "Failed to fetch litter data");
 
-            // 3. Fetch weather data (replace with your location and API key)
+            // 3. Fetch weather data
             var weatherData = await GetWeatherData();
+            double? temperature = null;
+            try
+            {
+                var root = weatherData as JsonElement?;
+                if (root.HasValue && root.Value.TryGetProperty("current", out var current))
+                {
+                    if (current.TryGetProperty("temperature_2m", out var tempProp))
+                        temperature = tempProp.GetDouble();
+                }
+            }
+            catch { /* ignore, temperature stays null */ }
 
-            // 4. Combine and return
+            // 4. Save each litter item as TrashPickup with temperature
+            if (litterData is JsonElement litterRoot && litterRoot.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in litterRoot.EnumerateArray())
+                {
+                    var pickup = new TrashPickup
+                    {
+                        TrashType = item.GetProperty("trashType").GetString(),
+                        Location = item.GetProperty("location").GetString(),
+                        Confidence = item.TryGetProperty("confidence", out var conf) ? conf.GetDouble() : 1.0,
+                        Time = DateTime.Now,
+                        Temperature = temperature
+                    };
+                    _dbContext.LitterModels.Add(pickup);
+                }
+                await _dbContext.SaveChangesAsync();
+            }
+
+            // 5. Combine and return
             return Ok(new { litter = litterData, weather = weatherData });
         }
 
@@ -89,6 +119,34 @@ namespace BitByBitTrashAPI.Controllers
             var json = await response.Content.ReadAsStringAsync();
             // If you want to use a strongly typed model, replace 'object' with WeatherModel and update the return type
             return JsonSerializer.Deserialize<object>(json) ?? new { error = "Empty weather data" };
+        }
+
+        [Authorize(Roles = "Beheerder, IT, Gebruiker")]
+        [HttpPost]
+        public async Task<IActionResult> CreatePickup([FromBody] TrashPickup pickup)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+
+            // Fetch weather data
+            var weatherData = await GetWeatherData();
+            double? temperature = null;
+            try
+            {
+                // Try to extract temperature_2m from the weather API response
+                var root = weatherData as JsonElement?;
+                if (root.HasValue && root.Value.TryGetProperty("current", out var current))
+                {
+                    if (current.TryGetProperty("temperature_2m", out var tempProp))
+                        temperature = tempProp.GetDouble();
+                }
+            }
+            catch { /* ignore, temperature stays null */ }
+            pickup.Temperature = temperature;
+
+            _dbContext.LitterModels.Add(pickup);
+            await _dbContext.SaveChangesAsync();
+            return CreatedAtAction(nameof(Get), new { id = pickup.Id }, pickup);
         }
     }
 }

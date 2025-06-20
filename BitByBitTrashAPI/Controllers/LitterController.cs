@@ -74,9 +74,16 @@ namespace BitByBitTrashAPI.Controllers
                     });
                 }
             }
+            var groupedTrash = enrichedLitter
+                .GroupBy(x => ((dynamic)x).trash_type.ToLower())
+                .Select(g => new {
+                    trash_type = g.Key,
+                    count = g.Count()
+                })
+                .ToList();
 
 
-            return Ok(new { litter = enrichedLitter, weather = weatherData });
+            return Ok(new { litter = enrichedLitter, weather = weatherData, chartData = groupedTrash });
 
         }
 

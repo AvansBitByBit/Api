@@ -114,6 +114,8 @@ builder.WebHost.ConfigureKestrel(options =>
 });
 
 builder.Services.AddScoped<GeocodingService>();
+builder.Services.AddHttpClient<GeocodingService>();
+builder.Services.AddMemoryCache();
 
 
 var app = builder.Build();

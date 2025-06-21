@@ -81,8 +81,8 @@ namespace BitByBitTrashAPI.Controllers
                         enrichedLitter.Add(new
                         {
                             location,
-                            latitude = coords.Value.lat,
-                            longitude = coords.Value.lon,
+                            latitude = coords.Value.lat / 100000.0,   // force decimal here
+                            longitude = coords.Value.lon / 100000.0,  // force decimal here
                             trashType,
                             confidence,
                             time

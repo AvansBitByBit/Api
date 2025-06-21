@@ -24,14 +24,14 @@ namespace BitByBitTrashAPI.Controllers
             _dbContext = dbContext;
         }
 
-        [Authorize(Roles = "Beheerder, IT, Gebruiker")]
+      //  [Authorize(Roles = "Beheerder, IT, Gebruiker")]
         [HttpGet(Name = "GetLitter")]
         public async Task<IActionResult> Get()
         {
             // 1. Authenticate with sensor API
             var token = await GetSensorApiToken();
-            if (string.IsNullOrEmpty(token))
-                return StatusCode(502, "Failed to authenticate with sensor API");
+            if (string.IsNullOrEmpty(token) || token.StartsWith("Auth failed") || token.StartsWith("SensoringToken"))
+                return StatusCode(502, $"Failed to authenticate with sensor API: {token}");
 
             // 2. Fetch litter data from sensor API
             var litterData = await GetSensorLitterData(token);
@@ -90,18 +90,22 @@ namespace BitByBitTrashAPI.Controllers
 
             var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
             var response = await client.PostAsync(url, content);
-            if (!response.IsSuccessStatusCode) return string.Empty;
+
+            if (!response.IsSuccessStatusCode) {
+                var errorBody = await response.Content.ReadAsStringAsync();
+                return $"Auth failed: Status {response.StatusCode}, Body: {errorBody}";
+            }
             var json = await response.Content.ReadAsStringAsync();
             using var doc = JsonDocument.Parse(json);
-            if (doc.RootElement.TryGetProperty("token", out var tokenProp))
+            if (doc.RootElement.TryGetProperty("access_token", out var tokenProp))
                 return tokenProp.GetString() ?? string.Empty;
-            return string.Empty;
+            return $"Auth succeeded but no access_token in response: {json}";
         }
 
         private async Task<object> GetSensorLitterData(string token)
         {
             var client = _httpClientFactory.CreateClient();
-            var url = "https://bugbusterscontainer.redbay-0ee43133.northeurope.azurecontainerapps.io/api/Litter";
+            var url = "https://bugbusterscontainer.redbay-0ee43133.northeurope.azurecontainerapps.io/api/Garbage/all";
             client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
             var response = await client.GetAsync(url);
             if (!response.IsSuccessStatusCode) return new { error = "Failed to fetch litter data" };
@@ -148,5 +152,6 @@ namespace BitByBitTrashAPI.Controllers
             await _dbContext.SaveChangesAsync();
             return CreatedAtAction(nameof(Get), new { id = pickup.Id }, pickup);
         }
+
     }
 }

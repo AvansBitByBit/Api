@@ -19,6 +19,8 @@ namespace BitByBitTrashAPI.Controllers
         private readonly GeocodingService _geocodingService;
         private readonly LitterDbContext _dbContext;
 
+        private static readonly ConcurrentDictionary<string, (double? temperature, double? precipitation)> WeatherCache = new();
+
         public LitterController(IHttpClientFactory httpClientFactory, IConfiguration configuration, GeocodingService geocodingService, LitterDbContext dbContext)
         {
             _httpClientFactory = httpClientFactory;
@@ -43,16 +45,6 @@ namespace BitByBitTrashAPI.Controllers
             if (litterArray.ValueKind != JsonValueKind.Array)
                 return StatusCode(500, "Litter data is not a JSON array.");
 
-            var weatherData = await GetWeatherData();
-            double? temperature = null;
-            try
-            {
-                var root = weatherData as JsonElement?;
-                if (root.HasValue && root.Value.TryGetProperty("current", out var current) && current.TryGetProperty("temperature_2m", out var tempProp))
-                    temperature = tempProp.GetDouble();
-            }
-            catch { }
-
             var enrichedLitter = new ConcurrentBag<object>();
             var trashEntities = new ConcurrentBag<TrashPickup>();
 
@@ -64,42 +56,50 @@ namespace BitByBitTrashAPI.Controllers
                     var coords = await _geocodingService.GeocodeAsync(location);
 
                     var trashType = item.GetProperty("trashType").GetString();
-                    var time = DateTime.Now;
-                    var confidence = item.TryGetProperty("confidence", out var conf) ? conf.GetDouble() : 1.0;
+                    var time = new DateTime(2025, 6, 6, 22, 0, 0); //alleen om de tijd te testen, en of de openmeteo goeie data teruggeeft gebasseerd op tijd.
 
-                    trashEntities.Add(new TrashPickup
-                    {
-                        TrashType = trashType,
-                        Location = location,
-                        Confidence = confidence,
-                        Time = time,
-                        Temperature = temperature
-                    });
+                    //var time = item.TryGetProperty("time", out var timeProp) //uigecomment omdat de time die we van de sensoring api krijgen verkeerd is.
+                    //    ? DateTime.Parse(timeProp.GetString() ?? "")
+                    //    : DateTime.Now;
+
+                    var confidence = item.TryGetProperty("confidence", out var conf) ? conf.GetDouble() : 1.0;
 
                     if (coords != null)
                     {
+                        double latitude = coords.Value.lat / 100000.0;
+                        double longitude = coords.Value.lon / 100000.0;
+
+                        var (temperature, precipitation) = await GetWeatherForBredaAtTime(time);
+
+                        trashEntities.Add(new TrashPickup
+                        {
+                            TrashType = trashType,
+                            Location = location,
+                            Confidence = confidence,
+                            Time = time,
+                            Temperature = temperature
+                        });
+
                         enrichedLitter.Add(new
                         {
                             location,
-                            latitude = coords.Value.lat / 100000.0, //alleen wanneer we de geocode.xyz api gebruiken, niet de nomanitim
-                            longitude = coords.Value.lon / 100000.0,
+                            latitude,
+                            longitude,
                             trashType,
                             confidence,
-                            time
+                            time,
+                            temperature,
+                            precipitation
                         });
                     }
                 }
                 catch (Exception ex)
                 {
-                    // Log or handle bad individual items if needed
                     Console.WriteLine($"Failed to process item: {ex.Message}");
                 }
             });
 
             await Task.WhenAll(tasks);
-
-            //_dbContext.LitterModels.AddRange(trashEntities);
-            //await _dbContext.SaveChangesAsync();
 
             var groupedTrash = enrichedLitter
                 .GroupBy(x => ((dynamic)x).trashType.ToLower())
@@ -110,9 +110,12 @@ namespace BitByBitTrashAPI.Controllers
                 })
                 .ToList();
 
-            return Ok(new { litter = enrichedLitter, weather = weatherData, chartData = groupedTrash });
+            return Ok(new
+            {
+                litter = enrichedLitter,
+                chartData = groupedTrash
+            });
         }
-
 
         private async Task<string> GetSensorApiToken()
         {
@@ -149,14 +152,63 @@ namespace BitByBitTrashAPI.Controllers
             return await response.Content.ReadAsStringAsync();
         }
 
-        private async Task<object> GetWeatherData()
+        private async Task<(double? temperature, double? precipitation)> GetWeatherForBredaAtTime(DateTime timestamp)
         {
+            double latitude = 51.5719;
+            double longitude = 4.7683;
+            string date = timestamp.ToString("yyyy-MM-dd");
+            string cacheKey = $"{latitude:F4},{longitude:F4}-{timestamp:yyyy-MM-dd-HH}";
+
+            if (WeatherCache.TryGetValue(cacheKey, out var cached))
+                return cached;
+
             var client = _httpClientFactory.CreateClient();
-            var url = "https://api.open-meteo.com/v1/forecast?latitude=51.571915&longitude=4.768323&current=temperature_2m,precipitation,rain,showers,snowfall,cloudcover,windspeed_10m,winddirection_10m,weathercode&timezone=auto";
+            var url = $"https://archive-api.open-meteo.com/v1/archive?" +
+                      $"latitude={latitude}&longitude={longitude}" +
+                      $"&start_date={date}&end_date={date}" +
+                      $"&hourly=temperature_2m,precipitation" +
+                      $"&timezone=Europe%2FAmsterdam";
+
             var response = await client.GetAsync(url);
-            if (!response.IsSuccessStatusCode) return new { error = "Failed to fetch weather data" };
+            if (!response.IsSuccessStatusCode)
+                return (null, null);
+
             var json = await response.Content.ReadAsStringAsync();
-            return JsonSerializer.Deserialize<object>(json) ?? new { error = "Empty weather data" };
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+
+            if (!root.TryGetProperty("hourly", out var hourly))
+                return (null, null);
+
+            var timestamps = hourly.GetProperty("time").EnumerateArray().ToList();
+            var temperatures = hourly.GetProperty("temperature_2m").EnumerateArray().ToList();
+            var precipitations = hourly.GetProperty("precipitation").EnumerateArray().ToList();
+
+            int closestIndex = -1;
+            TimeSpan minDiff = TimeSpan.MaxValue;
+
+            for (int i = 0; i < timestamps.Count; i++)
+            {
+                if (DateTime.TryParse(timestamps[i].GetString(), out DateTime hourlyTime))
+                {
+                    var diff = (hourlyTime - timestamp).Duration();
+                    if (diff < minDiff)
+                    {
+                        minDiff = diff;
+                        closestIndex = i;
+                    }
+                }
+            }
+
+            if (closestIndex >= 0 && closestIndex < temperatures.Count && closestIndex < precipitations.Count)
+            {
+                var temp = temperatures[closestIndex].GetDouble();
+                var precip = precipitations[closestIndex].GetDouble();
+                WeatherCache[cacheKey] = (temp, precip);
+                return (temp, precip);
+            }
+
+            return (null, null);
         }
     }
 }

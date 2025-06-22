@@ -20,52 +20,57 @@ namespace LitterControlTest;
 
 public class LitterControllerTest
 {
-    // Fake IGeocodingService for testing
-    public class FakeGeocodingService : IGeocodingService
+    private LitterController CreateController(HttpResponseMessage litterResponse, HttpResponseMessage weatherResponse, LitterDbContext dbContext, string token = "test-token")
     {
-        public Task<(double lat, double lon)?> GeocodeAsync(string location)
-        {
-            return Task.FromResult<(double lat, double lon)?>( (51.5719, 4.7683) );
-        }
-    }
-
-    private LitterController CreateController(HttpResponseMessage tokenResponse, HttpResponseMessage litterResponse, HttpResponseMessage weatherResponse, LitterDbContext dbContext)
-    {
+        // Mock IHttpClientFactory
         var mockFactory = new Mock<IHttpClientFactory>();
+        var mockClient = new Mock<HttpMessageHandler>();
+        var sequence = new MockSequence();
+
+        // Setup token request
+        var tokenClient = new Mock<HttpMessageHandler>();
+        tokenClient.Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent($"{{\"token\":\"{token}\"}}")
+            });
+        var litterClient = new Mock<HttpMessageHandler>();
+        litterClient.Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.Is<HttpRequestMessage>(r => r.RequestUri.ToString().Contains("/api/Litter")), ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(litterResponse);
+        var weatherClient = new Mock<HttpMessageHandler>();
+        weatherClient.Protected()
+            .Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.Is<HttpRequestMessage>(r => r.RequestUri.ToString().Contains("open-meteo.com")), ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(weatherResponse);
+
+        // Setup factory to return correct client for each call
         var callCount = 0;
         mockFactory.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(() =>
         {
             callCount++;
-            if (callCount == 1) return new HttpClient(new MockHttpMessageHandler(tokenResponse));
-            if (callCount == 2) return new HttpClient(new MockHttpMessageHandler(litterResponse));
-            return new HttpClient(new MockHttpMessageHandler(weatherResponse));
+            if (callCount == 1) return new HttpClient(tokenClient.Object);
+            if (callCount == 2) return new HttpClient(litterClient.Object);
+            return new HttpClient(weatherClient.Object);
         });
+
+        // Mock IConfiguration
         var mockConfig = new Mock<IConfiguration>();
         mockConfig.Setup(c => c["SensoringToken"]).Returns("dummy");
-        // Use the fake IGeocodingService
-        var fakeGeocodingService = new FakeGeocodingService();
-        return new LitterController(mockFactory.Object, mockConfig.Object, fakeGeocodingService, dbContext);
-    }    public class MockHttpMessageHandler : HttpMessageHandler
-    {
-        private readonly HttpResponseMessage _response;
-        public MockHttpMessageHandler(HttpResponseMessage response) => _response = response;
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => Task.FromResult(_response);
+
+        return new LitterController(mockFactory.Object, mockConfig.Object, dbContext);
     }
 
     [Fact]
     public async Task Get_ReturnsCombinedLitterAndWeather()
     {
         // Arrange
-        var tokenResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"access_token\":\"test-token\"}") };
-        var litterJson = "[{\"trashType\":\"plastic\",\"location\":\"loc1\",\"confidence\":0.9}]";
-        var weatherJson = "{ \"hourly\": { \"time\": [\"2025-06-06T22:00\"], \"temperature_2m\": [21.5], \"precipitation\": [0.0] } }";
+        var litterJson = "{\"testLitter\":123}";
+        var weatherJson = "{\"testWeather\":456}";
         var litterResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(litterJson) };
         var weatherResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(weatherJson) };
-        var options = new DbContextOptionsBuilder<LitterDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-        using var dbContext = new LitterDbContext(options);
-        var controller = CreateController(tokenResponse, litterResponse, weatherResponse, dbContext);
+        var dbContext = new Mock<LitterDbContext>(new DbContextOptions<LitterDbContext>());
+        var controller = CreateController(litterResponse, weatherResponse, dbContext.Object);
 
         // Act
         var result = await controller.Get();
@@ -82,14 +87,12 @@ public class LitterControllerTest
     public async Task Get_Returns502IfTokenFails()
     {
         // Arrange
-        var tokenResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"access_token\":\"\"}") };
         var litterResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") };
         var weatherResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") };
-        var options = new DbContextOptionsBuilder<LitterDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-        using var dbContext = new LitterDbContext(options);
-        var controller = CreateController(tokenResponse, litterResponse, weatherResponse, dbContext);        // Act
+        var dbContext = new Mock<LitterDbContext>(new DbContextOptions<LitterDbContext>());
+        var controller = CreateController(litterResponse, weatherResponse, dbContext.Object, token: "");
+
+        // Act
         var result = await controller.Get();
 
         // Assert
@@ -101,16 +104,40 @@ public class LitterControllerTest
     public async Task Get_SavesLitterWithTemperatureToDatabase()
     {
         // Arrange
-        var tokenResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"access_token\":\"test-token\"}") };
         var litterJson = "[{\"trashType\":\"plastic\",\"location\":\"loc1\",\"confidence\":0.9},{\"trashType\":\"glass\",\"location\":\"loc2\",\"confidence\":0.8}]";
         var weatherJson = "{ \"hourly\": { \"time\": [\"2025-06-06T22:00\"], \"temperature_2m\": [21.5], \"precipitation\": [0.0] } }";
         var litterResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(litterJson) };
         var weatherResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(weatherJson) };
+
+        // Use in-memory EF Core database
         var options = new DbContextOptionsBuilder<LitterDbContext>()
             .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
             .Options;
         using var dbContext = new LitterDbContext(options);
-        var controller = CreateController(tokenResponse, litterResponse, weatherResponse, dbContext);
+
+        // Mock IHttpClientFactory
+        var mockFactory = new Mock<IHttpClientFactory>();
+        var callCount = 0;
+        var tokenClient = new Mock<HttpMessageHandler>();
+        tokenClient.Protected().Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.IsAny<HttpRequestMessage>(), ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"token\":\"test-token\"}") });
+        var litterClient = new Mock<HttpMessageHandler>();
+        litterClient.Protected().Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.Is<HttpRequestMessage>(r => r.RequestUri.ToString().Contains("/api/Litter")), ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(litterResponse);
+        var weatherClient = new Mock<HttpMessageHandler>();
+        weatherClient.Protected().Setup<Task<HttpResponseMessage>>("SendAsync", ItExpr.Is<HttpRequestMessage>(r => r.RequestUri.ToString().Contains("open-meteo.com")), ItExpr.IsAny<CancellationToken>())
+            .ReturnsAsync(weatherResponse);
+        mockFactory.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(() =>
+        {
+            callCount++;
+            if (callCount == 1) return new HttpClient(tokenClient.Object);
+            if (callCount == 2) return new HttpClient(litterClient.Object);
+            return new HttpClient(weatherClient.Object);
+        });
+        var mockConfig = new Mock<IConfiguration>();
+        mockConfig.Setup(c => c["SensoringToken"]).Returns("dummy");
+
+        var controller = new LitterController(mockFactory.Object, mockConfig.Object, dbContext);
 
         // Act
         var result = await controller.Get();

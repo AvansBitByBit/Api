@@ -16,7 +16,7 @@ public class GeocodingService
     }
 
     private static readonly SemaphoreSlim _throttle = new SemaphoreSlim(1, 1);
-    private static readonly TimeSpan _throttleDelay = TimeSpan.FromMilliseconds(1500);
+    private static readonly TimeSpan _throttleDelay = TimeSpan.FromMilliseconds(503);
 
     public async Task<(double lat, double lon)?> GeocodeAsync(string location)
     {
@@ -36,7 +36,7 @@ public class GeocodingService
         {
             _logger.LogInformation($"Sending geocode request for: {location}");
 
-            //string url = $"https://nominatim.openstreetmap.org/search?format=json&q={Uri.EscapeDataString(location)}";
+            //string url = $"https://nominatim.openstreetmap.org/search?format=json&q={Uri.EscapeDataString(location)}"; //nominatim uit
             string url = $"https://geocode.xyz/{Uri.EscapeDataString(location)}?json=1";
 
 
@@ -47,7 +47,7 @@ public class GeocodingService
             response.EnsureSuccessStatusCode();
 
             var json = await response.Content.ReadAsStringAsync();
-            //var results = JsonSerializer.Deserialize<List<NominatimResponse>>(json);
+            //var results = JsonSerializer.Deserialize<List<NominatimResponse>>(json);  //nominatim uit
 
             //if (results?.Count > 0 &&
             //    double.TryParse(results[0].Lat, out var lat) &&
@@ -65,7 +65,7 @@ public class GeocodingService
                 double.TryParse(resultObj.longt, out var lon))
             {
                 var result = (lat, lon);
-                _cache.Set(cacheKey, result, TimeSpan.FromHours(12));
+                _cache.Set(cacheKey, result, TimeSpan.FromHours(168));
                 return result;
             }
 

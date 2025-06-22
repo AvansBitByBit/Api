@@ -81,8 +81,8 @@ namespace BitByBitTrashAPI.Controllers
                         enrichedLitter.Add(new
                         {
                             location,
-                            latitude = coords.Value.lat / 100000.0,   // force decimal here
-                            longitude = coords.Value.lon / 100000.0,  // force decimal here
+                            latitude = coords.Value.lat / 100000.0, //alleen wanneer we de geocode.xyz api gebruiken, niet de nomanitim
+                            longitude = coords.Value.lon / 100000.0,
                             trashType,
                             confidence,
                             time

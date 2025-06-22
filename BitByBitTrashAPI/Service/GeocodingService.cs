@@ -2,7 +2,9 @@
 using System.Text.Json;
 using Microsoft.Extensions.Caching.Memory;
 
-public class GeocodingService
+namespace BitByBitTrashAPI.Service;
+
+public class GeocodingService : IGeocodingService
 {
     private readonly HttpClient _httpClient;
     private readonly IMemoryCache _cache;

@@ -20,6 +20,15 @@ namespace LitterControlTest;
 
 public class LitterControllerTest
 {
+    // Fake IGeocodingService for testing
+    public class FakeGeocodingService : IGeocodingService
+    {
+        public Task<(double lat, double lon)?> GeocodeAsync(string location)
+        {
+            return Task.FromResult<(double lat, double lon)?>( (51.5719, 4.7683) );
+        }
+    }
+
     private LitterController CreateController(HttpResponseMessage tokenResponse, HttpResponseMessage litterResponse, HttpResponseMessage weatherResponse, LitterDbContext dbContext)
     {
         var mockFactory = new Mock<IHttpClientFactory>();
@@ -33,10 +42,10 @@ public class LitterControllerTest
         });
         var mockConfig = new Mock<IConfiguration>();
         mockConfig.Setup(c => c["SensoringToken"]).Returns("dummy");
-        return new LitterController(mockFactory.Object, mockConfig.Object, dbContext);
-    }
-
-    public class MockHttpMessageHandler : HttpMessageHandler
+        // Use the fake IGeocodingService
+        var fakeGeocodingService = new FakeGeocodingService();
+        return new LitterController(mockFactory.Object, mockConfig.Object, fakeGeocodingService, dbContext);
+    }    public class MockHttpMessageHandler : HttpMessageHandler
     {
         private readonly HttpResponseMessage _response;
         public MockHttpMessageHandler(HttpResponseMessage response) => _response = response;
@@ -48,23 +57,25 @@ public class LitterControllerTest
     {
         // Arrange
         var tokenResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"access_token\":\"test-token\"}") };
-        var litterJson = "{\"testLitter\":123}";
-        var weatherJson = "{\"testWeather\":456}";
+        var litterJson = "[{\"trashType\":\"plastic\",\"location\":\"loc1\",\"confidence\":0.9}]";
+        var weatherJson = "{ \"hourly\": { \"time\": [\"2025-06-06T22:00\"], \"temperature_2m\": [21.5], \"precipitation\": [0.0] } }";
         var litterResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(litterJson) };
         var weatherResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(weatherJson) };
-        var dbContext = new Mock<LitterDbContext>(new DbContextOptions<LitterDbContext>());
-        var controller = CreateController(tokenResponse, litterResponse, weatherResponse, dbContext.Object);
+        var options = new DbContextOptionsBuilder<LitterDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+        using var dbContext = new LitterDbContext(options);
+        var controller = CreateController(tokenResponse, litterResponse, weatherResponse, dbContext);
 
         // Act
         var result = await controller.Get();
 
         // Assert
         var okResult = Assert.IsType<OkObjectResult>(result);
-        var json = System.Text.Json.JsonSerializer.Serialize(okResult.Value);
-        using var doc = System.Text.Json.JsonDocument.Parse(json);
+        var json = System.Text.Json.JsonSerializer.Serialize(okResult.Value);        using var doc = System.Text.Json.JsonDocument.Parse(json);
         var root = doc.RootElement;
         Assert.True(root.TryGetProperty("litter", out _));
-        Assert.True(root.TryGetProperty("weather", out _));
+        Assert.True(root.TryGetProperty("chartData", out _));
     }
 
     [Fact]
@@ -74,10 +85,11 @@ public class LitterControllerTest
         var tokenResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"access_token\":\"\"}") };
         var litterResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") };
         var weatherResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") };
-        var dbContext = new Mock<LitterDbContext>(new DbContextOptions<LitterDbContext>());
-        var controller = CreateController(tokenResponse, litterResponse, weatherResponse, dbContext.Object);
-
-        // Act
+        var options = new DbContextOptionsBuilder<LitterDbContext>()
+            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .Options;
+        using var dbContext = new LitterDbContext(options);
+        var controller = CreateController(tokenResponse, litterResponse, weatherResponse, dbContext);        // Act
         var result = await controller.Get();
 
         // Assert
@@ -91,7 +103,7 @@ public class LitterControllerTest
         // Arrange
         var tokenResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"access_token\":\"test-token\"}") };
         var litterJson = "[{\"trashType\":\"plastic\",\"location\":\"loc1\",\"confidence\":0.9},{\"trashType\":\"glass\",\"location\":\"loc2\",\"confidence\":0.8}]";
-        var weatherJson = "{ \"current\": { \"temperature_2m\": 21.5 } }";
+        var weatherJson = "{ \"hourly\": { \"time\": [\"2025-06-06T22:00\"], \"temperature_2m\": [21.5], \"precipitation\": [0.0] } }";
         var litterResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(litterJson) };
         var weatherResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(weatherJson) };
         var options = new DbContextOptionsBuilder<LitterDbContext>()
@@ -114,6 +126,6 @@ public class LitterControllerTest
         using var doc = System.Text.Json.JsonDocument.Parse(json);
         var root = doc.RootElement;
         Assert.True(root.TryGetProperty("litter", out _));
-        Assert.True(root.TryGetProperty("weather", out _));
+        Assert.True(root.TryGetProperty("chartData", out _));
     }
 }

@@ -13,15 +13,14 @@ namespace BitByBitTrashAPI.Controllers
     [ApiController]
     [Route("Litter")]
     public class LitterController : ControllerBase
-    {
-        private readonly IHttpClientFactory _httpClientFactory;
+    {        private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
-        private readonly GeocodingService _geocodingService;
+        private readonly IGeocodingService _geocodingService;
         private readonly LitterDbContext _dbContext;
 
         private static readonly ConcurrentDictionary<string, (double? temperature, double? precipitation)> WeatherCache = new();
 
-        public LitterController(IHttpClientFactory httpClientFactory, IConfiguration configuration, GeocodingService geocodingService, LitterDbContext dbContext)
+        public LitterController(IHttpClientFactory httpClientFactory, IConfiguration configuration, IGeocodingService geocodingService, LitterDbContext dbContext)
         {
             _httpClientFactory = httpClientFactory;
             _configuration = configuration;
@@ -97,9 +96,11 @@ namespace BitByBitTrashAPI.Controllers
                 {
                     Console.WriteLine($"Failed to process item: {ex.Message}");
                 }
-            });
+            });            await Task.WhenAll(tasks);
 
-            await Task.WhenAll(tasks);
+            // Save trash pickups to database
+            _dbContext.LitterModels.AddRange(trashEntities);
+            await _dbContext.SaveChangesAsync();
 
             var groupedTrash = enrichedLitter
                 .GroupBy(x => ((dynamic)x).trashType.ToLower())

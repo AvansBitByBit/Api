@@ -86,14 +86,10 @@ public async Task Get_ReturnsOkWithLocalData()
 
     // Assert
     var okResult = Assert.IsType<OkObjectResult>(result);
-    dynamic response = okResult.Value!;
+    var response = Assert.IsAssignableFrom<IEnumerable<object>>(okResult.Value);
 
-    var litter = response.GetType().GetProperty("litter")?.GetValue(response) as IEnumerable<object>;
-    var weather = response.GetType().GetProperty("weather")?.GetValue(response);
-
-    Assert.NotNull(litter);
-    Assert.Single(litter);
-    Assert.NotNull(weather);
+    Assert.NotNull(response);
+    Assert.Single(response);
 }
 
 

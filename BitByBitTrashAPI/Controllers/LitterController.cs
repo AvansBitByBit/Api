@@ -36,10 +36,16 @@ namespace BitByBitTrashAPI.Controllers
         [HttpGet]
 public async Task<IActionResult> Get()
 {
-    // 1. Trigger verrijking (optioneel)
-    await GetNew(); // of: await _enricherService.RunAsync();
+    // 1. Trigger enrichment (optional)
+    var token = await GetSensorApiToken();
+    if (string.IsNullOrEmpty(token) || token.StartsWith("Auth failed"))
+    {
+        return StatusCode(502, "Failed to authenticate with sensor API");
+    }
 
-    // 2. Geef eigen opgeslagen data terug
+    await GetNew();
+
+    // 2. Fetch saved data
     var pickups = await _dbContext.LitterModels
         .OrderByDescending(x => x.Time)
         .Select(p => new
@@ -55,7 +61,12 @@ public async Task<IActionResult> Get()
         })
         .ToListAsync();
 
-    return Ok(pickups);
+    // 3. Return enriched data
+    return Ok(new
+    {
+        litter = pickups,
+        weather = "Historical weather data can be added here if needed"
+    });
 }
 
         [HttpGet("New")]
@@ -75,7 +86,7 @@ public async Task<IActionResult> Get()
 
             // Haal alle bestaande records op uit je eigen database
             var existingData = await _dbContext.LitterModels
-                .Select(x => new { x.Location, Date = x.Time.Date, x.Latitude, x.Longitude, x.Temperature })
+                .Select(x => new { x.Location, Date = x.Time.Date })
                 .ToListAsync();
 
             if (litterData is JsonElement litterRoot && litterRoot.ValueKind == JsonValueKind.Array)
@@ -90,69 +101,20 @@ public async Task<IActionResult> Get()
                                    DateTime.TryParse(timeProperty.GetString(), out var parsedTime)
                                    ? parsedTime : DateTime.Now;
 
-                    // Check if the item already exists in the database with valid coordinates
-                    bool existsWithCoordinates = existingData.Any(x =>
+                    // ⛔ Als deze combinatie al in DB zit → skip
+                    bool exists = existingData.Any(x =>
                         x.Location == location && x.Date == itemTime.Date);
 
-                    if (existsWithCoordinates)
+                    if (exists)
                     {
-                        var existingRecord = existingData.FirstOrDefault(x =>
-                            x.Location == location && x.Date == itemTime.Date);
-
-                        if (existingRecord != null && (existingRecord.Latitude == null || existingRecord.Longitude == null || existingRecord.Temperature == null))
-                        {
-                            _logger.LogInformation("Updating existing item with missing data for {Location} @ {Date}", location, itemTime.Date);
-                            
-                            // Get coordinates if missing
-                            double latitudes, longitudes;
-                            if (existingRecord.Latitude == null || existingRecord.Longitude == null)
-                            {
-                                var coordinate = await _geocodingService.GetCoordinatesFromAddressAsync(location);
-                                latitudes = coordinate.HasValue ? coordinate.Value.lat : 51.5719;
-                                longitudes = coordinate.HasValue ? coordinate.Value.lon : 4.7683;
-                            }
-                            else
-                            {
-                                latitudes = existingRecord.Latitude.Value;
-                                longitudes = existingRecord.Longitude.Value;
-                            }
-
-                            // Get temperature if missing or coordinates were updated
-                            double? updatedTemperature = existingRecord.Temperature;
-                            if (existingRecord.Temperature == null)
-                            {
-                                updatedTemperature = await _historicalWeatherService.GetHistoricalTemperatureAsync(
-                                    latitudes, longitudes, itemTime);
-                            }
-
-                            var recordToUpdate = await _dbContext.LitterModels.FirstOrDefaultAsync(x =>
-                                x.Location == location && x.Time.Date == itemTime.Date);
-
-                            if (recordToUpdate != null)
-                            {
-                                recordToUpdate.Latitude = latitudes;
-                                recordToUpdate.Longitude = longitudes;
-                                recordToUpdate.Temperature = updatedTemperature;
-                                await _dbContext.SaveChangesAsync();
-                            }
-                        }
-                        else
-                        {
-                            _logger.LogInformation("Skipping existing item with valid coordinates for {Location} @ {Date}", location, itemTime.Date);
-                        }
-                        continue; // Skip to next item regardless
+                        _logger.LogInformation("Skipping existing item for {Location} @ {Date}", location, itemTime.Date);
+                        continue;
                     }
 
-                    // Anders, verrijk het item (alleen voor nieuwe items)
+                    // 🔄 Anders enrichen
                     var coordinates = await _geocodingService.GetCoordinatesFromAddressAsync(location);
-                    if (!coordinates.HasValue)
-                    {
-                        _logger.LogWarning("Failed to fetch valid coordinates for {Location}. Using default values.", location);
-                    }
-
-                    // Ensure coordinates are not null
-                    double latitude = coordinates.HasValue ? coordinates.Value.lat : 51.5719;
-                    double longitude = coordinates.HasValue ? coordinates.Value.lon : 4.7683;
+                    double latitude = coordinates?.lat ?? 51.5719;
+                    double longitude = coordinates?.lon ?? 4.7683;
 
                     double? historicalTemperature = await _historicalWeatherService.GetHistoricalTemperatureAsync(
                         latitude, longitude, itemTime);

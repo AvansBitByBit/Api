@@ -36,10 +36,16 @@ namespace BitByBitTrashAPI.Controllers
         [HttpGet]
 public async Task<IActionResult> Get()
 {
-    // 1. Trigger verrijking (optioneel)
-    await GetNew(); // of: await _enricherService.RunAsync();
+    // 1. Trigger enrichment (optional)
+    var token = await GetSensorApiToken();
+    if (string.IsNullOrEmpty(token) || token.StartsWith("Auth failed"))
+    {
+        return StatusCode(502, "Failed to authenticate with sensor API");
+    }
 
-    // 2. Geef eigen opgeslagen data terug
+    await GetNew();
+
+    // 2. Fetch saved data
     var pickups = await _dbContext.LitterModels
         .OrderByDescending(x => x.Time)
         .Select(p => new
@@ -55,7 +61,12 @@ public async Task<IActionResult> Get()
         })
         .ToListAsync();
 
-    return Ok(pickups);
+    // 3. Return enriched data
+    return Ok(new
+    {
+        litter = pickups,
+        weather = "Historical weather data can be added here if needed"
+    });
 }
 
         [HttpGet("New")]

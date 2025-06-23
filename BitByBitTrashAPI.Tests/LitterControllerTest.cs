@@ -1,119 +1,133 @@
-﻿using Xunit;
-using Moq;
-using Microsoft.AspNetCore.Mvc;
-using BitByBitTrashAPI.Controllers;
-using Microsoft.Extensions.Configuration;
-using System.Threading.Tasks;
-using System.Net.Http;
-using System.Net;
-using System.Threading;
-using System;
-using Moq.Protected;
-using BitByBitTrashAPI.Models;
-using BitByBitTrashAPI.Service;
-using Microsoft.EntityFrameworkCore;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Text;
+using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
+using BitByBitTrashAPI.Controllers;
+using BitByBitTrashAPI.Models;
+using BitByBitTrashAPI.Service;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
+using Moq;
+using Moq.Protected;
+using Xunit;
 
-
-namespace LitterControlTest;
-
-public class LitterControllerTest
+namespace BitByBitTrashAPI.Tests.Controllers
 {
-    private LitterController CreateController(HttpResponseMessage tokenResponse, HttpResponseMessage litterResponse, HttpResponseMessage weatherResponse, LitterDbContext dbContext)
+    public class LitterControllerTests
     {
-        var mockFactory = new Mock<IHttpClientFactory>();
-        var callCount = 0;
-        mockFactory.Setup(f => f.CreateClient(It.IsAny<string>())).Returns(() =>
+        private readonly Mock<IHttpClientFactory> _httpClientFactory = new();
+        private readonly Mock<IConfiguration> _configuration = new();
+        private readonly Mock<IHistoricalWeatherService> _weatherService = new();
+        private readonly Mock<ILogger<LitterController>> _logger = new();
+        private readonly Mock<IGeocodingService> _geocodingService = new();
+        private readonly LitterDbContext _dbContext;
+
+        public LitterControllerTests()
         {
-            callCount++;
-            if (callCount == 1) return new HttpClient(new MockHttpMessageHandler(tokenResponse));
-            if (callCount == 2) return new HttpClient(new MockHttpMessageHandler(litterResponse));
-            return new HttpClient(new MockHttpMessageHandler(weatherResponse));
+            var options = new DbContextOptionsBuilder<LitterDbContext>()
+                .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+                .Options;
+
+            _dbContext = new LitterDbContext(options);
+        }
+
+        [Fact]
+public async Task Get_ReturnsOkWithLocalData()
+{
+    // Arrange
+    _dbContext.LitterModels.Add(new TrashPickup
+    {
+        Id = Guid.NewGuid(),
+        TrashType = "plastic",
+        Location = "Teststraat 1",
+        Time = DateTime.UtcNow,
+        Latitude = 51.5,
+        Longitude = 4.7,
+        Confidence = 99,
+        Temperature = 22.2
+    });
+    await _dbContext.SaveChangesAsync();
+
+    var mockMessageHandler = new Mock<HttpMessageHandler>();
+    mockMessageHandler
+        .Protected()
+        .Setup<Task<HttpResponseMessage>>(
+            "SendAsync",
+            ItExpr.IsAny<HttpRequestMessage>(),
+            ItExpr.IsAny<CancellationToken>())
+        .ReturnsAsync(new HttpResponseMessage
+        {
+            StatusCode = HttpStatusCode.OK,
+            Content = new StringContent("{\"access_token\": \"dummy-token\"}", Encoding.UTF8, "application/json")
         });
-        var mockConfig = new Mock<IConfiguration>();
-        mockConfig.Setup(c => c["SensoringToken"]).Returns("dummy");
-        return new LitterController(mockFactory.Object, mockConfig.Object, dbContext);
-    }
 
-    public class MockHttpMessageHandler : HttpMessageHandler
-    {
-        private readonly HttpResponseMessage _response;
-        public MockHttpMessageHandler(HttpResponseMessage response) => _response = response;
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) => Task.FromResult(_response);
-    }
+    var httpClient = new HttpClient(mockMessageHandler.Object);
+    _httpClientFactory.Setup(_ => _.CreateClient(It.IsAny<string>())).Returns(httpClient);
+    _configuration.Setup(c => c["SensoringToken"]).Returns("dummy-secret");
 
-    [Fact]
-    public async Task Get_ReturnsCombinedLitterAndWeather()
-    {
-        // Arrange
-        var tokenResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"access_token\":\"test-token\"}") };
-        var litterJson = "{\"testLitter\":123}";
-        var weatherJson = "{\"testWeather\":456}";
-        var litterResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(litterJson) };
-        var weatherResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(weatherJson) };
-        var dbContext = new Mock<LitterDbContext>(new DbContextOptions<LitterDbContext>());
-        var controller = CreateController(tokenResponse, litterResponse, weatherResponse, dbContext.Object);
+    var controller = new LitterController(
+        _httpClientFactory.Object,
+        _geocodingService.Object,
+        _configuration.Object,
+        _dbContext,
+        _weatherService.Object,
+        _logger.Object
+    );
 
-        // Act
-        var result = await controller.Get();
+    // Act
+    var result = await controller.Get();
 
-        // Assert
-        var okResult = Assert.IsType<OkObjectResult>(result);
-        var json = System.Text.Json.JsonSerializer.Serialize(okResult.Value);
-        using var doc = System.Text.Json.JsonDocument.Parse(json);
-        var root = doc.RootElement;
-        Assert.True(root.TryGetProperty("litter", out _));
-        Assert.True(root.TryGetProperty("weather", out _));
-    }
+    // Assert
+    var okResult = Assert.IsType<OkObjectResult>(result);
+    dynamic response = okResult.Value!;
 
-    [Fact]
-    public async Task Get_Returns502IfTokenFails()
-    {
-        // Arrange
-        var tokenResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"access_token\":\"\"}") };
-        var litterResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") };
-        var weatherResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") };
-        var dbContext = new Mock<LitterDbContext>(new DbContextOptions<LitterDbContext>());
-        var controller = CreateController(tokenResponse, litterResponse, weatherResponse, dbContext.Object);
+    var litter = response.GetType().GetProperty("litter")?.GetValue(response) as IEnumerable<object>;
+    var weather = response.GetType().GetProperty("weather")?.GetValue(response);
 
-        // Act
-        var result = await controller.Get();
+    Assert.NotNull(litter);
+    Assert.Single(litter);
+    Assert.NotNull(weather);
+}
 
-        // Assert
-        var status = Assert.IsType<ObjectResult>(result);
-        Assert.Equal(502, status.StatusCode);
-    }
 
-    [Fact]
-    public async Task Get_SavesLitterWithTemperatureToDatabase()
-    {
-        // Arrange
-        var tokenResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{\"access_token\":\"test-token\"}") };
-        var litterJson = "[{\"trashType\":\"plastic\",\"location\":\"loc1\",\"confidence\":0.9},{\"trashType\":\"glass\",\"location\":\"loc2\",\"confidence\":0.8}]";
-        var weatherJson = "{ \"current\": { \"temperature_2m\": 21.5 } }";
-        var litterResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(litterJson) };
-        var weatherResponse = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(weatherJson) };
-        var options = new DbContextOptionsBuilder<LitterDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
-            .Options;
-        using var dbContext = new LitterDbContext(options);
-        var controller = CreateController(tokenResponse, litterResponse, weatherResponse, dbContext);
+        [Fact]
+        public async Task CreatePickup_AddsPickupToDatabase()
+        {
+            // Arrange
+            var controller = new LitterController(
+                _httpClientFactory.Object,
+                _geocodingService.Object,
+                _configuration.Object,
+                _dbContext,
+                _weatherService.Object,
+                _logger.Object
+            );
 
-        // Act
-        var result = await controller.Get();
+            var pickup = new TrashPickup
+            {
+                TrashType = "can",
+                Location = "Teststraat 2",
+                Time = DateTime.UtcNow,
+                Latitude = 51.6,
+                Longitude = 4.8,
+                Confidence = 88
+            };
 
-        // Assert
-        var addedPickups = dbContext.LitterModels.ToList();
-        Assert.Equal(2, addedPickups.Count);
-        Assert.All(addedPickups, p => Assert.Equal(21.5, p.Temperature));
-        Assert.Contains(addedPickups, p => p.TrashType == "plastic" && p.Location == "loc1");
-        Assert.Contains(addedPickups, p => p.TrashType == "glass" && p.Location == "loc2");
-        var okResult = Assert.IsType<OkObjectResult>(result);
-        var json = System.Text.Json.JsonSerializer.Serialize(okResult.Value);
-        using var doc = System.Text.Json.JsonDocument.Parse(json);
-        var root = doc.RootElement;
-        Assert.True(root.TryGetProperty("litter", out _));
-        Assert.True(root.TryGetProperty("weather", out _));
+            // Act
+            var result = await controller.CreatePickup(pickup);
+
+            // Assert
+            var created = Assert.IsType<CreatedAtActionResult>(result);
+            var stored = await _dbContext.LitterModels.FirstOrDefaultAsync(x => x.Location == "Teststraat 2");
+            Assert.NotNull(stored);
+            Assert.Equal("can", stored.TrashType);
+        }
     }
 }

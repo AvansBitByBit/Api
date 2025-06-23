@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using BitByBitTrashAPI.Service;
+using Microsoft.EntityFrameworkCore;
 
 namespace BitByBitTrashAPI.Controllers
 {
@@ -17,88 +18,161 @@ namespace BitByBitTrashAPI.Controllers
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
         private readonly LitterDbContext _dbContext;
-        public LitterController(IHttpClientFactory httpClientFactory, IConfiguration configuration, LitterDbContext dbContext)
+        private readonly IHistoricalWeatherService _historicalWeatherService;
+        private readonly ILogger<LitterController> _logger;
+        private readonly IGeocodingService _geocodingService;
+
+        public LitterController(IHttpClientFactory httpClientFactory, IGeocodingService geocodingService, IConfiguration configuration, LitterDbContext dbContext, IHistoricalWeatherService historicalWeatherService, ILogger<LitterController> logger)
         {
             _httpClientFactory = httpClientFactory;
             _configuration = configuration;
             _dbContext = dbContext;
+            _historicalWeatherService = historicalWeatherService;
+            _geocodingService = geocodingService;
+            _logger = logger;
         }
 
-      //  [Authorize(Roles = "Beheerder, IT, Gebruiker")]
-        [HttpGet(Name = "GetLitter")]
-        public async Task<IActionResult> Get()
+
+        [HttpGet]
+public async Task<IActionResult> Get()
+{
+    // 1. Trigger enrichment (optional)
+    var token = await GetSensorApiToken();
+    if (string.IsNullOrEmpty(token) || token.StartsWith("Auth failed"))
+    {
+        return StatusCode(502, "Failed to authenticate with sensor API");
+    }
+
+    await GetNew();
+
+    // 2. Fetch saved data
+    var pickups = await _dbContext.LitterModels
+        .OrderByDescending(x => x.Time)
+        .Select(p => new
         {
-            // 1. Authenticate with sensor API
+            id = p.Id,
+            time = p.Time,
+            trashType = p.TrashType,
+            location = p.Location,
+            latitude = p.Latitude,
+            longitude = p.Longitude,
+            confidence = p.Confidence,
+            temperature = p.Temperature
+        })
+        .ToListAsync();
+
+    // 3. Return enriched data
+    return Ok(new
+    {
+        litter = pickups,
+        weather = "Historical weather data can be added here if needed"
+    });
+}
+
+        [HttpGet("New")]
+        public async Task<IActionResult> GetNew()
+        {
             var token = await GetSensorApiToken();
-            if (string.IsNullOrEmpty(token) || token.StartsWith("Auth failed") || token.StartsWith("SensoringToken"))
+            if (string.IsNullOrEmpty(token) || token.StartsWith("Auth failed"))
                 return StatusCode(502, $"Failed to authenticate with sensor API: {token}");
 
-            // 2. Fetch litter data from sensor API
             var litterData = await GetSensorLitterData(token);
             if (litterData == null)
                 return StatusCode(502, "Failed to fetch litter data");
 
-            // 3. Fetch weather data
             var weatherData = await GetWeatherData();
-            double? temperature = null;
-            try
-            {
-                var root = weatherData as JsonElement?;
-                if (root.HasValue && root.Value.TryGetProperty("current", out var current))
-                {
-                    if (current.TryGetProperty("temperature_2m", out var tempProp))
-                        temperature = tempProp.GetDouble();
-                }
-            }
-            catch { /* ignore, temperature stays null */ }
 
-            // 4. Save each litter item as TrashPickup with temperature
+            var enrichedLitterData = new List<object>();
+
+            // Haal alle bestaande records op uit je eigen database
+            var existingData = await _dbContext.LitterModels
+                .Select(x => new { x.Location, Date = x.Time.Date })
+                .ToListAsync();
+
             if (litterData is JsonElement litterRoot && litterRoot.ValueKind == JsonValueKind.Array)
             {
                 foreach (var item in litterRoot.EnumerateArray())
                 {
+                    var trashType = item.GetProperty("trashType").GetString() ?? "unknown";
+                    var location = item.GetProperty("location").GetString() ?? "";
+                    var confidence = item.TryGetProperty("confidence", out var conf) ? conf.GetDouble() : 1.0;
+
+                    var itemTime = item.TryGetProperty("time", out var timeProperty) &&
+                                   DateTime.TryParse(timeProperty.GetString(), out var parsedTime)
+                                   ? parsedTime : DateTime.Now;
+
+                    // ⛔ Als deze combinatie al in DB zit → skip
+                    bool exists = existingData.Any(x =>
+                        x.Location == location && x.Date == itemTime.Date);
+
+                    if (exists)
+                    {
+                        _logger.LogInformation("Skipping existing item for {Location} @ {Date}", location, itemTime.Date);
+                        continue;
+                    }
+
+                    // 🔄 Anders enrichen
+                    var coordinates = await _geocodingService.GetCoordinatesFromAddressAsync(location);
+                    double latitude = coordinates?.lat ?? 51.5719;
+                    double longitude = coordinates?.lon ?? 4.7683;
+
+                    double? historicalTemperature = await _historicalWeatherService.GetHistoricalTemperatureAsync(
+                        latitude, longitude, itemTime);
+
+                    var enrichedItem = new
+                    {
+                        id = item.TryGetProperty("id", out var idProp) ? idProp.GetString() : Guid.NewGuid().ToString(),
+                        time = itemTime,
+                        trashType = trashType,
+                        location = location,
+                        latitude = latitude,
+                        longitude = longitude,
+                        confidence = confidence,
+                        temperature = historicalTemperature
+                    };
+
+                    enrichedLitterData.Add(enrichedItem);
+
                     var pickup = new TrashPickup
                     {
-                        TrashType = item.GetProperty("trashType").GetString(),
-                        Location = item.GetProperty("location").GetString(),
-                        Confidence = item.TryGetProperty("confidence", out var conf) ? conf.GetDouble() : 1.0,
-                        Time = DateTime.Now,
-                        Temperature = temperature
+                        TrashType = trashType,
+                        Location = location,
+                        Latitude = latitude,
+                        Longitude = longitude,
+                        Confidence = confidence,
+                        Time = itemTime,
+                        Temperature = historicalTemperature
                     };
+
                     _dbContext.LitterModels.Add(pickup);
                 }
+
                 await _dbContext.SaveChangesAsync();
             }
 
-            // 5. Combine and return
-            return Ok(new { litter = litterData, weather = weatherData });
+       return Ok("Enrichment completed");
         }
 
         private async Task<string> GetSensorApiToken()
         {
-             string SensoringToken = _configuration["SensoringToken"];
-            if (string.IsNullOrEmpty(SensoringToken))
+            string? token = _configuration["SensoringToken"];
+            if (string.IsNullOrEmpty(token))
                 return "SensoringToken is not configured";
 
             var client = _httpClientFactory.CreateClient();
             var url = "https://bugbusterscontainer.redbay-0ee43133.northeurope.azurecontainerapps.io/api/Auth/token";
-            var body = new
-            {
-                clientId = "BitByBit",
-                clientSecret = SensoringToken,
-            };
-
+            var body = new { clientId = "BitByBit", clientSecret = token };
             var content = new StringContent(JsonSerializer.Serialize(body), Encoding.UTF8, "application/json");
-            var response = await client.PostAsync(url, content);
 
-            if (!response.IsSuccessStatusCode) {
-                var errorBody = await response.Content.ReadAsStringAsync();
-                return $"Auth failed: Status {response.StatusCode}, Body: {errorBody}";
-            }
+            var response = await client.PostAsync(url, content);
+            if (!response.IsSuccessStatusCode)
+                return $"Auth failed: Status {response.StatusCode}, Body: {await response.Content.ReadAsStringAsync()}";
+
             var json = await response.Content.ReadAsStringAsync();
             using var doc = JsonDocument.Parse(json);
             if (doc.RootElement.TryGetProperty("access_token", out var tokenProp))
                 return tokenProp.GetString() ?? string.Empty;
+
             return $"Auth succeeded but no access_token in response: {json}";
         }
 
@@ -116,12 +190,10 @@ namespace BitByBitTrashAPI.Controllers
         private async Task<object> GetWeatherData()
         {
             var client = _httpClientFactory.CreateClient();
-            // Free weather API: Open-Meteo (no API key required)
-            var url = "https://api.open-meteo.com/v1/forecast?latitude=51.571915&longitude=4.768323&current=temperature_2m,precipitation,rain,showers,snowfall,cloudcover,windspeed_10m,winddirection_10m,weathercode&timezone=auto";
+            var url = "https://api.open-meteo.com/v1/forecast?latitude=51.571915&longitude=4.768323&current=temperature_2m&timezone=auto";
             var response = await client.GetAsync(url);
             if (!response.IsSuccessStatusCode) return new { error = "Failed to fetch weather data" };
             var json = await response.Content.ReadAsStringAsync();
-            // If you want to use a strongly typed model, replace 'object' with WeatherModel and update the return type
             return JsonSerializer.Deserialize<object>(json) ?? new { error = "Empty weather data" };
         }
 
@@ -132,26 +204,24 @@ namespace BitByBitTrashAPI.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            // Fetch weather data
-            var weatherData = await GetWeatherData();
-            double? temperature = null;
-            try
+            if (!pickup.Latitude.HasValue || !pickup.Longitude.HasValue)
             {
-                // Try to extract temperature_2m from the weather API response
-                var root = weatherData as JsonElement?;
-                if (root.HasValue && root.Value.TryGetProperty("current", out var current))
-                {
-                    if (current.TryGetProperty("temperature_2m", out var tempProp))
-                        temperature = tempProp.GetDouble();
-                }
+                pickup.Latitude = 51.5719;
+                pickup.Longitude = 4.7683;
             }
-            catch { /* ignore, temperature stays null */ }
-            pickup.Temperature = temperature;
+
+            if (!pickup.Temperature.HasValue && pickup.Latitude.HasValue && pickup.Longitude.HasValue)
+            {
+                pickup.Temperature = await _historicalWeatherService.GetHistoricalTemperatureAsync(
+                    pickup.Latitude.Value,
+                    pickup.Longitude.Value,
+                    pickup.Time);
+            }
 
             _dbContext.LitterModels.Add(pickup);
             await _dbContext.SaveChangesAsync();
+
             return CreatedAtAction(nameof(Get), new { id = pickup.Id }, pickup);
         }
-
     }
 }

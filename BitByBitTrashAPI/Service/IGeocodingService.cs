@@ -2,5 +2,5 @@ namespace BitByBitTrashAPI.Service;
 
 public interface IGeocodingService
 {
-    Task<(double lat, double lon)?> GeocodeAsync(string location);
+ public Task<(double lat, double lon)?> GetCoordinatesFromAddressAsync(string address);
 }

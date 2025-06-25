@@ -11,7 +11,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace BitByBitTrashAPI.Controllers
 {
-    [Authorize]
     [ApiController]
     [Route("Litter")]
     public class LitterController : ControllerBase
